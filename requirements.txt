@@ -1,0 +1,9 @@
+streamlit
+streamlit-ace
+openai
+langchain_core
+langchain_community
+pandas
+openai-whisper
+ffmpeg
+ffmpeg-python
