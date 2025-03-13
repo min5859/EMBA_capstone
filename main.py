@@ -156,22 +156,55 @@ class FinancialAnalyzer:
     @staticmethod
     def process_financial_data(financial_data_list, years):
         """여러 연도의 재무 데이터를 처리하여 필요한 정보 추출
-        
+
         Args:
             financial_data_list (list): 각 연도별 재무제표 데이터 목록
             years (list): 연도 목록
-            
+
         Returns:
             dict: 처리된 재무 데이터
         """
+        # 디버깅 정보 출력
+        st.write("## 디버깅 정보")
+        st.write(f"요청 연도: {years}")
+        st.write(f"데이터 목록 길이: {len(financial_data_list)}")
+
+        # 각 데이터셋의 기본 정보 확인
+        for i, data in enumerate(financial_data_list):
+            if data is None:
+                st.write(f"{years[i]}년 데이터: None")
+            elif 'status' in data and data['status'] != '000':
+                st.write(f"{years[i]}년 데이터: API 오류 - {data.get('message', '알 수 없는 오류')}")
+            elif 'list' not in data:
+                st.write(f"{years[i]}년 데이터: 'list' 키 없음")
+            else:
+                st.write(f"{years[i]}년 데이터: {len(data['list'])}개 항목")
+
+                # 첫 5개 항목 샘플 출력
+                if len(data['list']) > 0:
+                    st.write(f"{years[i]}년 데이터 샘플:")
+                    sample_data = pd.DataFrame(data['list'][:5])[['account_nm', 'account_id', 'thstrm_amount']]
+                    st.dataframe(sample_data)
+
         # 관심 있는 계정과목
         accounts = {
-            "자산": ["ifrs-full_Assets", "ifrs_Assets", "Assets", "ifrs_TotalAssets", "TotalAssets", "asset"],
-            "부채": ["ifrs-full_Liabilities", "ifrs_Liabilities", "Liabilities", "ifrs_TotalLiabilities", "TotalLiabilities"],
-            "자본": ["ifrs-full_Equity", "ifrs_Equity", "Equity", "EquityAttributableToOwnersOfParent", "ifrs_TotalEquity", "TotalEquity"],
-            "매출액": ["ifrs-full_Revenue", "ifrs_Revenue", "Revenue", "ifrs_GrossOperatingProfit", "GrossOperatingProfit", "ifrs_OperatingRevenue", "OperatingRevenue", "ifrs_Sales", "Sales"],
-            "영업이익": ["ifrs-full_OperatingIncome", "ifrs_OperatingIncome", "OperatingIncome", "ifrs_ProfitLossFromOperatingActivities", "ProfitLossFromOperatingActivities"],
-            "당기순이익": ["ifrs-full_ProfitLoss", "ifrs_ProfitLoss", "ProfitLoss", "ifrs_ProfitLossAttributableToOwnersOfParent", "ProfitLossAttributableToOwnersOfParent", "NetIncome"]
+            "자산": ["ifrs-full_Assets", "ifrs_Assets", "Assets", 
+                     "ifrs-full_TotalAssets", "ifrs_TotalAssets", "TotalAssets"],
+            "부채": ["ifrs-full_Liabilities", "ifrs_Liabilities", "Liabilities", 
+                     "ifrs-full_TotalLiabilities", "ifrs_TotalLiabilities", "TotalLiabilities"],
+            "자본": ["ifrs-full_Equity", "ifrs_Equity", "Equity", 
+                     "EquityAttributableToOwnersOfParent", "ifrs-full_EquityAttributableToOwnersOfParent",
+                     "ifrs-full_TotalEquity", "ifrs_TotalEquity", "TotalEquity"],
+            "매출액": ["ifrs-full_Revenue", "ifrs_Revenue", "Revenue", 
+                      "ifrs-full_OperatingRevenue", "ifrs_OperatingRevenue", "OperatingRevenue", 
+                      "ifrs-full_GrossOperatingProfit", "ifrs_GrossOperatingProfit", "GrossOperatingProfit",
+                      "ifrs-full_Sales", "ifrs_Sales", "Sales"],
+            "영업이익": ["ifrs-full_OperatingIncome", "ifrs_OperatingIncome", "OperatingIncome", 
+                        "ifrs-full_ProfitLossFromOperatingActivities", "ifrs_ProfitLossFromOperatingActivities",
+                        "ProfitLossFromOperatingActivities"],
+            "당기순이익": ["ifrs-full_ProfitLoss", "ifrs_ProfitLoss", "ProfitLoss", 
+                         "ifrs-full_ProfitLossAttributableToOwnersOfParent", "ifrs_ProfitLossAttributableToOwnersOfParent", 
+                         "ProfitLossAttributableToOwnersOfParent", "ifrs-full_NetIncome", "ifrs_NetIncome", "NetIncome"]
         }
 
         # 결과 데이터 초기화
@@ -184,65 +217,142 @@ class FinancialAnalyzer:
             "net_income": [],
             "years": years
         }
-        
+
         # 연도별 데이터 처리
         for idx, year_data in enumerate(financial_data_list):
+            st.write(f"### {years[idx]}년 데이터 처리")
+
+            year_result = {
+                "assets": 0,
+                "liabilities": 0,
+                "equity": 0,
+                "revenue": 0,
+                "operating_profit": 0,
+                "net_income": 0
+            }
+
             if year_data is None or 'list' not in year_data:
-                # 빈 데이터 처리
-                result["assets"].append(0)
-                result["liabilities"].append(0)
-                result["equity"].append(0)
-                result["revenue"].append(0)
-                result["operating_profit"].append(0)
-                result["net_income"].append(0)
+                st.write(f"{years[idx]}년: 데이터 없음")
+                for key in year_result.keys():
+                    result[key].append(0)
                 continue
             
             # 각 계정 찾기
             fin_data = year_data['list']
-            
+
+            # 계정과목 목록 확인
+            unique_accounts = {}
+            for item in fin_data:
+                if 'account_id' in item and 'account_nm' in item:
+                    unique_accounts[item['account_id']] = item['account_nm']
+
+            st.write(f"발견된 계정과목 수: {len(unique_accounts)}")
+
+            # 주요 계정과목 찾기
+            found_accounts = {key: False for key in accounts.keys()}
+
             # 각 계정별로 값 찾기
             for fin_item in fin_data:
                 account_id = fin_item.get('account_id')
                 if account_id:
                     for key, id_list in accounts.items():
-                        if account_id in id_list and fin_item.get('sj_div') == 'BS' and key in ["자산", "부채", "자본"]:
-                            try:
-                                value = int(fin_item.get('thstrm_amount', '0').replace(',', ''))
-                                if key == "자산" and (not result["assets"] or result["assets"][-1] == 0):
-                                    result["assets"].append(value // 1000000)  # 백만원 단위로 변환
-                                elif key == "부채" and (not result["liabilities"] or result["liabilities"][-1] == 0):
-                                    result["liabilities"].append(value // 1000000)
-                                elif key == "자본" and (not result["equity"] or result["equity"][-1] == 0):
-                                    result["equity"].append(value // 1000000)
-                            except (ValueError, TypeError):
-                                pass
-                        elif account_id in id_list and fin_item.get('sj_div') == 'CIS' and key in ["매출액", "영업이익", "당기순이익"]:
-                            try:
-                                value = int(fin_item.get('thstrm_amount', '0').replace(',', ''))
-                                if key == "매출액" and (not result["revenue"] or result["revenue"][-1] == 0):
-                                    result["revenue"].append(value // 1000000)
-                                elif key == "영업이익" and (not result["operating_profit"] or result["operating_profit"][-1] == 0):
-                                    result["operating_profit"].append(value // 1000000)
-                                elif key == "당기순이익" and (not result["net_income"] or result["net_income"][-1] == 0):
-                                    result["net_income"].append(value // 1000000)
-                            except (ValueError, TypeError):
-                                pass
-        
-        # 부족한 데이터 채우기
-        for key in ["assets", "liabilities", "equity", "revenue", "operating_profit", "net_income"]:
-            while len(result[key]) < len(years):
-                result[key].append(0)
+                        if account_id in id_list:
+                            sj_div = fin_item.get('sj_div', '')
 
-        # 데이터 유효성 확인 및 안내
-        valid_data_years = []
-        for i, year in enumerate(years):
-            if result["revenue"][i] > 0 or result["operating_profit"][i] > 0:
-                valid_data_years.append(year)
+                            # 대차대조표 항목 (자산, 부채, 자본)
+                            if key in ["자산", "부채", "자본"] and sj_div == 'BS':
+                                try:
+                                    value = int(fin_item.get('thstrm_amount', '0').replace(',', ''))
+                                    if key == "자산" and year_result["assets"] == 0:
+                                        year_result["assets"] = value // 1000000  # 백만원 단위로 변환
+                                        found_accounts[key] = True
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                    elif key == "부채" and year_result["liabilities"] == 0:
+                                        year_result["liabilities"] = value // 1000000
+                                        found_accounts[key] = True
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                    elif key == "자본" and year_result["equity"] == 0:
+                                        year_result["equity"] = value // 1000000
+                                        found_accounts[key] = True
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                except (ValueError, TypeError) as e:
+                                    st.write(f"❌ {key} 처리 오류: {e}")
 
-        if valid_data_years:
-            st.info(f"유효한 재무 데이터가 있는 연도: {', '.join(map(str, valid_data_years))}")
+                            # 손익계산서 항목 (매출액, 영업이익, 당기순이익)
+                            elif key in ["매출액", "영업이익", "당기순이익"] and (sj_div == 'CIS' or sj_div == 'IS'):
+                                try:
+                                    value = int(fin_item.get('thstrm_amount', '0').replace(',', ''))
+                                    if key == "매출액" and year_result["revenue"] == 0:
+                                        year_result["revenue"] = value // 1000000
+                                        found_accounts[key] = True
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                    elif key == "영업이익" and year_result["operating_profit"] == 0:
+                                        year_result["operating_profit"] = value // 1000000
+                                        found_accounts[key] = True
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                    elif key == "당기순이익" and year_result["net_income"] == 0:
+                                        year_result["net_income"] = value // 1000000
+                                        found_accounts[key] = True
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                except (ValueError, TypeError) as e:
+                                    st.write(f"❌ {key} 처리 오류: {e}")
+
+            # 찾지 못한 계정과목 표시
+            for key, found in found_accounts.items():
+                if not found:
+                    st.write(f"❌ {key} 찾지 못함")
+                    # 찾고자 하는 계정과목 ID 표시
+                    st.write(f"    찾을 ID: {accounts[key]}")
+                    # 유사한 계정과목 찾기
+                    similar_accounts = []
+                    for act_id, act_nm in unique_accounts.items():
+                        for pattern in accounts[key]:
+                            if pattern.lower() in act_id.lower():
+                                similar_accounts.append(f"{act_id} ({act_nm})")
+                    if similar_accounts:
+                        st.write(f"    유사 계정과목: {', '.join(similar_accounts[:5])}")
+
+            # 연도별 결과 추가
+            for key, value in year_result.items():
+                result[key].append(value)
+
+        # 처리 결과 요약
+        st.write("### 처리 결과 요약")
+        result_df = pd.DataFrame({
+            "연도": years,
+            "자산": result["assets"],
+            "부채": result["liabilities"],
+            "자본": result["equity"],
+            "매출액": result["revenue"],
+            "영업이익": result["operating_profit"],
+            "당기순이익": result["net_income"]
+        })
+        st.dataframe(result_df)
+
+        # 유효 데이터 확인
+        valid_data_count = sum(1 for i in range(len(years)) 
+                              if result["revenue"][i] > 0 or result["operating_profit"][i] > 0)
+
+        if valid_data_count > 0:
+            st.write(f"유효한 재무 데이터가 있는 연도 수: {valid_data_count}")
         else:
-            st.warning("유효한 재무 데이터가 없습니다.")
+            st.warning("유효한 재무 데이터가 없습니다!")
+
+        # 계정과목 ID를 좀 더 확인하기 위한 정보
+        st.write("### 모든 계정과목 목록")
+        all_accounts = {}
+        for data in financial_data_list:
+            if data and 'list' in data:
+                for item in data['list']:
+                    if 'account_id' in item and 'account_nm' in item:
+                        all_accounts[item['account_id']] = item['account_nm']
+
+        if all_accounts:
+            st.write(f"총 계정과목 수: {len(all_accounts)}")
+            account_df = pd.DataFrame([
+                {"계정ID": k, "계정명": v} for k, v in all_accounts.items()
+            ])
+            st.dataframe(account_df)
 
         return result
     
