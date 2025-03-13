@@ -7,3 +7,6 @@ pandas
 openai-whisper
 ffmpeg
 ffmpeg-python
+numpy
+plotly
+requests
