@@ -232,7 +232,18 @@ class FinancialAnalyzer:
         for key in ["assets", "liabilities", "equity", "revenue", "operating_profit", "net_income"]:
             while len(result[key]) < len(years):
                 result[key].append(0)
-        
+
+        # 데이터 유효성 확인 및 안내
+        valid_data_years = []
+        for i, year in enumerate(years):
+            if result["revenue"][i] > 0 or result["operating_profit"][i] > 0:
+                valid_data_years.append(year)
+
+        if valid_data_years:
+            st.info(f"유효한 재무 데이터가 있는 연도: {', '.join(map(str, valid_data_years))}")
+        else:
+            st.warning("유효한 재무 데이터가 없습니다.")
+
         return result
     
     @staticmethod
@@ -311,12 +322,36 @@ class FinancialAnalyzer:
         Returns:
             dict: 가치 평가 결과
         """
-        # 최근 재무 데이터
-        current_revenue = financial_data["revenue"][-1]
-        current_op_profit = financial_data["operating_profit"][-1]
-        current_net_income = financial_data["net_income"][-1]
-        current_equity = financial_data["equity"][-1]
-        
+        #current_revenue = financial_data["revenue"][-1]
+
+        # 유효한 데이터가 없는 경우 처리
+        if not any(financial_data["net_income"]) and not any(financial_data["operating_profit"]):
+            return {
+                "valuations": [
+                    {"평가 방법": "데이터 부족", "추정 가치 (백만원)": "N/A"}
+                ],
+                "range": (0, 0)
+            }
+
+        # 가장 최근 유효 데이터 찾기
+        for i in range(len(financial_data["years"])-1, -1, -1):
+            if financial_data["net_income"][i] > 0 or financial_data["operating_profit"][i] > 0:
+                current_net_income = financial_data["net_income"][i]
+                current_op_profit = financial_data["operating_profit"][i]
+                current_equity = financial_data["equity"][i]
+                year = financial_data["years"][i]
+
+                st.info(f"가치평가에 {year}년 데이터를 사용합니다.")
+                break
+        else:
+            # 유효한 데이터를 찾지 못한 경우
+            return {
+                "valuations": [
+                    {"평가 방법": "데이터 부족", "추정 가치 (백만원)": "N/A"}
+                ],
+                "range": (0, 0)
+            }
+
         # PER 기반 가치 평가
         avg_industry_per = 15  # 업종 평균 PER (예시)
         estimated_value_per = current_net_income * avg_industry_per if current_net_income > 0 else 0
@@ -465,23 +500,43 @@ class BridgeApp:
             corp_code (str): 기업 고유 코드
         """
         st.subheader("재무 정보")
-        
+
         # 연도 선택
         current_year = datetime.now().year
-        year = st.selectbox("기준 연도:", list(range(current_year-5, current_year)), index=4)
-        
+        year = st.selectbox("기준 연도:", list(range(current_year-7, current_year)), index=4)
+
+        # 탐색할 연도 범위 확장
+        st.write("탐색할 연도 범위:")
+        year_range = st.slider("연도 범위", 1, 5, 3)
+        years = list(range(year-year_range+1, year+1))
+
         # 3개년 재무제표 데이터 가져오기
         years = [year-2, year-1, year]
         financial_data_list = []
-        
-        for yr in years:
+        valid_years = []
+        valid_financial_data_list = []
+
+        for idx, yr in enumerate(years):
             with st.spinner(f"{yr}년 재무제표 조회 중..."):
                 fin_data = self.dart_api.get_financial_statements(corp_code, str(yr))
                 financial_data_list.append(fin_data)
-        
-        # 재무 데이터 처리
-        financial_data = self.financial_analyzer.process_financial_data(financial_data_list, years)
-        
+
+                # 유효한 데이터만 필터링
+                if fin_data and 'list' in fin_data and len(fin_data['list']) > 0:
+                    valid_financial_data_list.append(fin_data)
+                    valid_years.append(yr)
+                    st.success(f"{yr}년 데이터 조회 완료 ({len(fin_data['list'])}개 항목)")
+                else:
+                    st.warning(f"{yr}년 데이터가 없습니다.")
+
+        # 유효한 데이터가 없으면 안내 메시지 출력
+        if not valid_financial_data_list:
+            st.error("조회 가능한 재무 데이터가 없습니다.")
+            return
+
+        # 유효한 데이터만으로 재무 분석 진행
+        financial_data = self.financial_analyzer.process_financial_data(valid_financial_data_list, valid_years)
+
         # 자산/부채/자본 그래프
         st.subheader("재무상태")
         balance_df = pd.DataFrame({
