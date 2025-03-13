@@ -513,11 +513,22 @@ class BridgeApp:
         
         if 'corp_code_data' not in st.session_state:
             st.session_state.corp_code_data = None
+            
+        # 기업 선택 상태 저장
+        if 'selected_company' not in st.session_state:
+            st.session_state.selected_company = None
+            
+        if 'company_info' not in st.session_state:
+            st.session_state.company_info = None
+            
+        # 연도 선택을 위한 상태
+        if 'selected_year' not in st.session_state:
+            st.session_state.selected_year = datetime.now().year - 1
         
         # 클래스 인스턴스 초기화
         self.dart_api = None
         self.financial_analyzer = FinancialAnalyzer()
-    
+
     def setup_sidebar(self):
         """사이드바 설정"""
         st.sidebar.title("Bridge POC")
@@ -562,7 +573,15 @@ class BridgeApp:
             filtered_companies = [comp for comp in st.session_state.corp_code_data if keyword.lower() in comp["corp_name"].lower()]
             return filtered_companies[:10]  # 최대 10개만 반환
         return st.session_state.corp_code_data[:10]  # 최대 10개만 반환
-    
+
+    def on_company_select(self, company):
+        """기업 선택 시 호출될 콜백 함수"""
+        st.session_state.selected_company = company
+        
+    def on_year_change(self, year):
+        """연도 변경 시 호출될 콜백 함수"""
+        st.session_state.selected_year = year
+
     def display_company_info(self, company_info):
         """기업 기본 정보 표시
         
@@ -602,7 +621,7 @@ class BridgeApp:
         
         for metric, score in scores.items():
             st.metric(label=metric, value=f"{score}/100")
-    
+   
     def display_financial_info(self, corp_code):
         """재무 정보 표시
         
@@ -610,27 +629,32 @@ class BridgeApp:
             corp_code (str): 기업 고유 코드
         """
         st.subheader("재무 정보")
-
-        # 연도 선택
+        
+        # 연도 선택 - 세션 상태 사용
         current_year = datetime.now().year
-        year = st.selectbox("기준 연도:", list(range(current_year-7, current_year)), index=4)
-
-        # 탐색할 연도 범위 확장
-        st.write("탐색할 연도 범위:")
-        year_range = st.slider("연도 범위", 1, 5, 3)
-        years = list(range(year-year_range+1, year+1))
-
+        year = st.selectbox(
+            "기준 연도:", 
+            list(range(current_year-5, current_year)), 
+            index=list(range(current_year-5, current_year)).index(st.session_state.selected_year),
+            on_change=self.on_year_change,
+            args=(st.session_state.selected_year,)
+        )
+        
+        # 연도가 변경되었으면 상태 업데이트
+        if year != st.session_state.selected_year:
+            self.on_year_change(year)
+        
         # 3개년 재무제표 데이터 가져오기
         years = [year-2, year-1, year]
         financial_data_list = []
         valid_years = []
         valid_financial_data_list = []
-
-        for idx, yr in enumerate(years):
+        
+        for yr in years:
             with st.spinner(f"{yr}년 재무제표 조회 중..."):
                 fin_data = self.dart_api.get_financial_statements(corp_code, str(yr))
                 financial_data_list.append(fin_data)
-
+ 
                 # 유효한 데이터만 필터링
                 if fin_data and 'list' in fin_data and len(fin_data['list']) > 0:
                     valid_financial_data_list.append(fin_data)
@@ -710,50 +734,57 @@ class BridgeApp:
         """애플리케이션 실행"""
         # 사이드바 설정
         self.setup_sidebar()
-        
+
         # 메인 타이틀
         st.title("Bridge - 기업 정보 조회 시스템 POC")
-        
+
         # API 키 확인
         if not st.session_state.api_key:
             st.warning("사이드바에 Open DART API 키를 입력해주세요.")
             return
-        
-        # 기업 검색
-        search_keyword = st.text_input("기업명을 입력하세요:")
-        companies = self.search_companies(search_keyword)
-        
-        if companies:
-            company_names = [f"{comp['corp_name']} ({comp['stock_code']})" for comp in companies]
-            selected_company_idx = st.selectbox("기업을 선택하세요:", range(len(company_names)), format_func=lambda x: company_names[x])
-            
-            if st.button("기업 정보 조회"):
-                selected_company = companies[selected_company_idx]
-                corp_code = selected_company["corp_code"]
-                
-                # 기업 정보 로딩 표시
-                with st.spinner("기업 정보를 조회 중입니다..."):
-                    company_info = self.dart_api.get_company_info(corp_code)
-                
-                if company_info:
-                    # 기본 정보와 재무 정보를 나란히 표시
-                    col1, col2 = st.columns([1, 2])
-                    
-                    # 기업 기본 정보 표시
-                    with col1:
-                        self.display_company_info(company_info)
-                    
-                    # 재무 정보 표시
-                    with col2:
-                        self.display_financial_info(corp_code)
-                else:
-                    st.error("기업 정보를 조회할 수 없습니다.")
-        else:
-            if search_keyword:
-                st.info("검색 결과가 없습니다. 다른 키워드로 검색해보세요.")
-            else:
-                st.info("기업명을 입력하여 검색하세요.")
 
+        # API 연결
+        self.dart_api = DartAPI(st.session_state.api_key)
+        
+        # 기업 검색 섹션
+        with st.expander("기업 검색", expanded=not st.session_state.selected_company):
+            search_keyword = st.text_input("기업명을 입력하세요:")
+            companies = self.search_companies(search_keyword)
+
+            if companies:
+                company_names = [f"{comp['corp_name']} ({comp['stock_code']})" for comp in companies]
+                selected_company_idx = st.selectbox("기업을 선택하세요:", range(len(company_names)), format_func=lambda x: company_names[x])
+
+                if st.button("기업 정보 조회"):
+                    selected_company = companies[selected_company_idx]
+                    self.on_company_select(selected_company)
+
+                    # 기업 정보 로딩
+                    with st.spinner("기업 정보를 조회 중입니다..."):
+                        company_info = self.dart_api.get_company_info(selected_company["corp_code"])
+                        if company_info:
+                            st.session_state.company_info = company_info
+            else:
+                if search_keyword:
+                    st.info("검색 결과가 없습니다. 다른 키워드로 검색해보세요.")
+                else:
+                    st.info("기업명을 입력하여 검색하세요.")
+
+        # 선택된 기업 정보 표시
+        if st.session_state.selected_company and st.session_state.company_info:
+            # 선택된 기업 정보 헤더 표시
+            st.markdown(f"## 선택된 기업: {st.session_state.company_info.get('corp_name', '알 수 없음')} ({st.session_state.selected_company.get('stock_code', '')})")
+
+            # 기본 정보와 재무 정보를 나란히 표시
+            col1, col2 = st.columns([1, 2])
+
+            # 기업 기본 정보 표시
+            with col1:
+                self.display_company_info(st.session_state.company_info)
+
+            # 재무 정보 표시
+            with col2:
+                self.display_financial_info(st.session_state.selected_company["corp_code"])
 
 # 애플리케이션 실행
 if __name__ == "__main__":
