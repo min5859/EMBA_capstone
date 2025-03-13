@@ -166,14 +166,14 @@ class FinancialAnalyzer:
         """
         # 관심 있는 계정과목
         accounts = {
-            "자산": ["ifrs-full_Assets", "ifrs_Assets", "Assets"],
-            "부채": ["ifrs-full_Liabilities", "ifrs_Liabilities", "Liabilities"],
-            "자본": ["ifrs-full_Equity", "ifrs_Equity", "Equity", "EquityAttributableToOwnersOfParent"],
-            "매출액": ["ifrs-full_Revenue", "ifrs_Revenue", "Revenue", "ifrs_GrossOperatingProfit", "GrossOperatingProfit"],
-            "영업이익": ["ifrs-full_OperatingIncome", "ifrs_OperatingIncome", "OperatingIncome", "ifrs_ProfitLossFromOperatingActivities"],
-            "당기순이익": ["ifrs-full_ProfitLoss", "ifrs_ProfitLoss", "ProfitLoss", "ifrs_ProfitLossAttributableToOwnersOfParent"]
+            "자산": ["ifrs-full_Assets", "ifrs_Assets", "Assets", "ifrs_TotalAssets", "TotalAssets", "asset"],
+            "부채": ["ifrs-full_Liabilities", "ifrs_Liabilities", "Liabilities", "ifrs_TotalLiabilities", "TotalLiabilities"],
+            "자본": ["ifrs-full_Equity", "ifrs_Equity", "Equity", "EquityAttributableToOwnersOfParent", "ifrs_TotalEquity", "TotalEquity"],
+            "매출액": ["ifrs-full_Revenue", "ifrs_Revenue", "Revenue", "ifrs_GrossOperatingProfit", "GrossOperatingProfit", "ifrs_OperatingRevenue", "OperatingRevenue", "ifrs_Sales", "Sales"],
+            "영업이익": ["ifrs-full_OperatingIncome", "ifrs_OperatingIncome", "OperatingIncome", "ifrs_ProfitLossFromOperatingActivities", "ProfitLossFromOperatingActivities"],
+            "당기순이익": ["ifrs-full_ProfitLoss", "ifrs_ProfitLoss", "ProfitLoss", "ifrs_ProfitLossAttributableToOwnersOfParent", "ProfitLossAttributableToOwnersOfParent", "NetIncome"]
         }
-        
+
         # 결과 데이터 초기화
         result = {
             "assets": [],
