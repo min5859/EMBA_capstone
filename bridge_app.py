@@ -5,6 +5,7 @@ import random
 from datetime import datetime
 from dart_api import DartAPI
 from financial_analyzer import FinancialAnalyzer
+from llm_analyzer import LLMAnalyzer
 
 class BridgeApp:
     """Bridge M&A 분석 애플리케이션 클래스"""
@@ -22,6 +23,10 @@ class BridgeApp:
         if 'api_key' not in st.session_state:
             # DartAPI 클래스를 통해 환경변수에서 API 키 로드
             st.session_state.api_key = DartAPI.get_api_key_from_env()
+            
+        if 'openai_api_key' not in st.session_state:
+            # LLMAnalyzer 클래스를 통해 환경변수에서 API 키 로드
+            st.session_state.openai_api_key = LLMAnalyzer.get_api_key_from_env()
         
         if 'corp_code_data' not in st.session_state:
             st.session_state.corp_code_data = None
@@ -40,6 +45,7 @@ class BridgeApp:
         # 클래스 인스턴스 초기화
         self.dart_api = None
         self.financial_analyzer = FinancialAnalyzer()
+        self.llm_analyzer = LLMAnalyzer()
 
     def setup_sidebar(self):
         """사이드바 설정"""
@@ -48,7 +54,7 @@ class BridgeApp:
         이 애플리케이션은 Open DART API를 활용하여 기업 정보를 조회하는 POC입니다.
         """)
         
-        # API 키 상태 체크
+        # API 키 상태 체크 (DART API)
         if not st.session_state.api_key:
             # API 키가 없을 경우에만 입력 필드 표시
             api_key = st.sidebar.text_input(
@@ -60,19 +66,48 @@ class BridgeApp:
             if api_key:
                 st.session_state.api_key = api_key
                 self.dart_api = DartAPI(api_key)
-                st.sidebar.success("API 키가 설정되었습니다.")
+                st.sidebar.success("DART API 키가 설정되었습니다.")
                 # 입력 필드 숨기기 위한 재실행
                 st.experimental_rerun()
         else:
             # API 키가 이미 있는 경우
-            st.sidebar.success("API 키가 설정되어 있습니다.")
+            st.sidebar.success("DART API 키가 설정되어 있습니다.")
             # API 키 재설정 옵션
-            if st.sidebar.button("API 키 재설정"):
+            if st.sidebar.button("DART API 키 재설정", key="reset_dart_api"):
                 st.session_state.api_key = ""
-                st.rerun()
+                st.experimental_rerun()
             
             # DartAPI 초기화
             self.dart_api = DartAPI(st.session_state.api_key)
+        
+        # 구분선
+        st.sidebar.markdown("---")
+        
+        # OpenAI API 키 설정
+        if not st.session_state.openai_api_key:
+            # API 키가 없을 경우에만 입력 필드 표시
+            openai_api_key = st.sidebar.text_input(
+                "OpenAI API KEY를 입력하세요", 
+                type="password", 
+                key="openai_api_key_input",
+                help="LLM 분석을 위한 OpenAI API 키를 입력하세요. .env 파일에 설정하면 자동으로 로드됩니다."
+            )
+            if openai_api_key:
+                st.session_state.openai_api_key = openai_api_key
+                self.llm_analyzer.set_api_key(openai_api_key)
+                st.sidebar.success("OpenAI API 키가 설정되었습니다.")
+                # 입력 필드 숨기기 위한 재실행
+                st.experimental_rerun()
+        else:
+            # API 키가 이미 있는 경우
+            st.sidebar.success("OpenAI API 키가 설정되어 있습니다.")
+            # API 키 재설정 옵션
+            if st.sidebar.button("OpenAI API 키 재설정", key="reset_openai_api"):
+                st.session_state.openai_api_key = ""
+                st.experimental_rerun()
+            
+            # LLMAnalyzer 초기화
+            self.llm_analyzer.set_api_key(st.session_state.openai_api_key)
     
     def search_companies(self, keyword):
         """키워드로 기업 검색
@@ -451,6 +486,155 @@ class BridgeApp:
         else:
             st.warning("가치 평가에 필요한 재무 데이터가 충분하지 않습니다.")
     
+    def display_llm_analysis(self, company_info, corp_code):
+        """LLM을 이용한 기업 분석 표시
+
+        Args:
+            company_info (dict): 기업 기본 정보
+            corp_code (str): 기업 고유 코드
+        """
+        st.subheader("AI 기반 기업 가치 분석")
+
+        # OpenAI API 키 확인
+        if not st.session_state.openai_api_key:
+            st.warning("OpenAI API 키가 설정되지 않았습니다. 사이드바에서 OpenAI API 키를 설정해주세요.")
+            return
+
+        # 데이터 로드
+        financial_data, success = self._load_financial_data(corp_code)
+        if not success:
+            st.error("조회 가능한 재무 데이터가 없습니다.")
+            return
+
+        # 분석 모드 선택
+        analysis_mode = st.radio(
+            "분석 모드 선택:", 
+            ["기업 가치 종합 분석", "맞춤형 질문 분석"],
+            horizontal=True,
+            key="llm_analysis_mode"
+        )
+
+        if analysis_mode == "기업 가치 종합 분석":
+            # 분석 진행 버튼
+            if st.button("AI 종합 분석 시작", key="run_llm_analysis", type="primary", use_container_width=True):
+                with st.spinner("AI가 기업을 분석 중입니다... 약 30초 소요됩니다."):
+                    # 임의의 산업 정보 생성 (예시)
+                    industry_info = {
+                        "sector": company_info.get('induty', '알 수 없음'),
+                        "avg_per": "15.2",
+                        "avg_pbr": "1.8"
+                    }
+
+                    # LLM 분석 수행
+                    result = self.llm_analyzer.analyze_company_value(
+                        company_info, 
+                        financial_data, 
+                        industry_info
+                    )
+
+                    if result["status"] == "success":
+                        # 결과를 세션 상태에 저장
+                        st.session_state.llm_analysis_result = result["analysis"]
+
+                        # 분석 결과 표시
+                        st.success("AI 분석이 완료되었습니다!")
+                        st.markdown("## AI 기업 가치 평가 결과")
+                        st.markdown(result["analysis"])
+
+                        # 분석 결과 다운로드 버튼
+                        st.download_button(
+                            label="분석 결과 다운로드 (TXT)",
+                            data=result["analysis"],
+                            file_name=f"{company_info.get('corp_name', '기업')}_AI분석_{datetime.now().strftime('%Y%m%d')}.txt",
+                            mime="text/plain"
+                        )
+                    else:
+                        st.error(f"분석 중 오류가 발생했습니다: {result.get('message', '알 수 없는 오류')}")
+
+            # 이전 분석 결과가 있으면 표시
+            elif 'llm_analysis_result' in st.session_state:
+                st.markdown("## AI 기업 가치 평가 결과")
+                st.markdown(st.session_state.llm_analysis_result)
+
+                # 분석 결과 다운로드 버튼
+                st.download_button(
+                    label="분석 결과 다운로드 (TXT)",
+                    data=st.session_state.llm_analysis_result,
+                    file_name=f"{company_info.get('corp_name', '기업')}_AI분석_{datetime.now().strftime('%Y%m%d')}.txt",
+                    mime="text/plain"
+                )
+
+            else:
+                st.info("AI 종합 분석 시작 버튼을 클릭하여 기업 가치 평가를 시작하세요.")
+                st.caption("분석에는 OpenAI API 사용료가 발생할 수 있습니다.")
+
+        else:  # 맞춤형 질문 분석 모드
+            st.subheader("맞춤형 기업 분석 질문")
+
+            # 기본 질문 예시
+            default_questions = [
+                "이 기업의 성장성과 수익성 측면에서 투자 매력도는 어떤가요?",
+                "이 기업의 재무 상태는 안정적인가요?",
+                "이 기업의 주요 리스크 요인은 무엇인가요?",
+                "이 기업은 M&A 대상으로서 적합한가요?",
+                "이 기업의 경쟁 우위는 무엇인가요?"
+            ]
+
+            # 질문 선택 또는 입력
+            question_option = st.selectbox(
+                "질문 선택 또는 직접 입력하기:",
+                ["직접 입력하기"] + default_questions,
+                key="question_option"
+            )
+
+            if question_option == "직접 입력하기":
+                user_question = st.text_area(
+                    "분석할 질문을 입력하세요:",
+                    height=100,
+                    key="user_question"
+                )
+            else:
+                user_question = question_option
+
+            # 질문 분석 버튼
+            if user_question and st.button("질문 분석하기", type="primary", key="analyze_question", use_container_width=True):
+                with st.spinner("AI가 질문을 분석 중입니다..."):
+                    # LLM 분석 수행
+                    result = self.llm_analyzer.analyze_investment_potential(
+                        company_info,
+                        financial_data,
+                        user_question
+                    )
+
+                    if result["status"] == "success":
+                        # 결과를 세션 상태에 저장 (질문 해시값을 키로 사용)
+                        # 문자열 해시를 안전하게 계산
+                        import hashlib
+                        question_hash = hashlib.md5(user_question.encode()).hexdigest()
+                        key = f"llm_question_result_{question_hash}"
+                        st.session_state[key] = result["analysis"]
+
+                        # 분석 결과 표시
+                        st.success("질문 분석이 완료되었습니다!")
+                        st.markdown("### 분석 결과")
+                        st.markdown(result["analysis"])
+                    else:
+                        st.error(f"분석 중 오류가 발생했습니다: {result.get('message', '알 수 없는 오류')}")
+
+            # 이전 질문 결과가 있으면 표시
+            elif question_option != "직접 입력하기":
+                # 문자열 해시를 안전하게 계산
+                import hashlib
+                question_hash = hashlib.md5(question_option.encode()).hexdigest()
+                key = f"llm_question_result_{question_hash}"
+                if key in st.session_state:
+                    st.markdown("### 분석 결과")
+                    st.markdown(st.session_state[key])
+
+            if not user_question:
+                st.info("위에서 질문을 선택하거나 직접 입력한 후 '질문 분석하기' 버튼을 클릭하세요.")
+                st.caption("분석에는 OpenAI API 사용료가 발생할 수 있습니다.")
+
     def run(self):
         """애플리케이션 실행"""
         # 사이드바 설정
@@ -497,7 +681,7 @@ class BridgeApp:
             st.markdown(f"## 선택된 기업: {st.session_state.company_info.get('corp_name', '알 수 없음')} ({st.session_state.selected_company.get('stock_code', '')})")
 
             # 탭 생성
-            tabs = st.tabs(["기업 개요", "재무 현황", "재무 비율", "가치 평가"])
+            tabs = st.tabs(["기업 개요", "재무 현황", "재무 비율", "가치 평가", "LLM 분석"])
             
             # 탭 1: 기업 개요
             with tabs[0]:
@@ -514,3 +698,7 @@ class BridgeApp:
             # 탭 4: 가치 평가
             with tabs[3]:
                 self.display_valuation(st.session_state.selected_company["corp_code"])
+                
+            # 탭 5: LLM 기업 분석
+            with tabs[4]:
+                self.display_llm_analysis(st.session_state.company_info, st.session_state.selected_company["corp_code"])
