@@ -15,27 +15,27 @@ class FinancialAnalyzer:
         Returns:
             dict: 처리된 재무 데이터
         """
-        # 디버깅 정보 출력
-        st.write("## 디버깅 정보")
-        st.write(f"요청 연도: {years}")
-        st.write(f"데이터 목록 길이: {len(financial_data_list)}")
+        # 디버깅 정보는 접혀진 expander에 넣기
+        with st.expander("디버깅 정보 (클릭하여 펼치기)", expanded=False):
+            st.write(f"요청 연도: {years}")
+            st.write(f"데이터 목록 길이: {len(financial_data_list)}")
 
-        # 각 데이터셋의 기본 정보 확인
-        for i, data in enumerate(financial_data_list):
-            if data is None:
-                st.write(f"{years[i]}년 데이터: None")
-            elif 'status' in data and data['status'] != '000':
-                st.write(f"{years[i]}년 데이터: API 오류 - {data.get('message', '알 수 없는 오류')}")
-            elif 'list' not in data:
-                st.write(f"{years[i]}년 데이터: 'list' 키 없음")
-            else:
-                st.write(f"{years[i]}년 데이터: {len(data['list'])}개 항목")
+            # 각 데이터셋의 기본 정보 확인
+            for i, data in enumerate(financial_data_list):
+                if data is None:
+                    st.write(f"{years[i]}년 데이터: None")
+                elif 'status' in data and data['status'] != '000':
+                    st.write(f"{years[i]}년 데이터: API 오류 - {data.get('message', '알 수 없는 오류')}")
+                elif 'list' not in data:
+                    st.write(f"{years[i]}년 데이터: 'list' 키 없음")
+                else:
+                    st.write(f"{years[i]}년 데이터: {len(data['list'])}개 항목")
 
-                # 첫 5개 항목 샘플 출력
-                if len(data['list']) > 0:
-                    st.write(f"{years[i]}년 데이터 샘플:")
-                    sample_data = pd.DataFrame(data['list'][:5])[['account_nm', 'account_id', 'thstrm_amount']]
-                    st.dataframe(sample_data)
+                    # 첫 5개 항목 샘플 출력
+                    if len(data['list']) > 0:
+                        st.write(f"{years[i]}년 데이터 샘플:")
+                        sample_data = pd.DataFrame(data['list'][:5])[['account_nm', 'account_id', 'thstrm_amount']]
+                        st.dataframe(sample_data)
 
         # 관심 있는 계정과목
         accounts = {
@@ -167,43 +167,43 @@ class FinancialAnalyzer:
             for key, value in year_result.items():
                 result[key].append(value)
 
-        # 처리 결과 요약
-        st.write("### 처리 결과 요약")
-        result_df = pd.DataFrame({
-            "연도": years,
-            "자산": result["assets"],
-            "부채": result["liabilities"],
-            "자본": result["equity"],
-            "매출액": result["revenue"],
-            "영업이익": result["operating_profit"],
-            "당기순이익": result["net_income"]
-        })
-        st.dataframe(result_df)
+        # 처리 결과 요약 (디버깅 정보 expander에 포함)
+        with st.expander("처리 결과 요약", expanded=False):
+            result_df = pd.DataFrame({
+                "연도": years,
+                "자산": result["assets"],
+                "부채": result["liabilities"],
+                "자본": result["equity"],
+                "매출액": result["revenue"],
+                "영업이익": result["operating_profit"],
+                "당기순이익": result["net_income"]
+            })
+            st.dataframe(result_df)
 
-        # 유효 데이터 확인
-        valid_data_count = sum(1 for i in range(len(years)) 
-                              if result["revenue"][i] > 0 or result["operating_profit"][i] > 0)
+            # 유효 데이터 확인
+            valid_data_count = sum(1 for i in range(len(years)) 
+                                if result["revenue"][i] > 0 or result["operating_profit"][i] > 0)
 
-        if valid_data_count > 0:
-            st.write(f"유효한 재무 데이터가 있는 연도 수: {valid_data_count}")
-        else:
-            st.warning("유효한 재무 데이터가 없습니다!")
+            if valid_data_count > 0:
+                st.write(f"유효한 재무 데이터가 있는 연도 수: {valid_data_count}")
+            else:
+                st.warning("유효한 재무 데이터가 없습니다!")
 
-        # 계정과목 ID를 좀 더 확인하기 위한 정보
-        st.write("### 모든 계정과목 목록")
-        all_accounts = {}
-        for data in financial_data_list:
-            if data and 'list' in data:
-                for item in data['list']:
-                    if 'account_id' in item and 'account_nm' in item:
-                        all_accounts[item['account_id']] = item['account_nm']
+            # 계정과목 ID를 좀 더 확인하기 위한 정보
+            st.write("### 모든 계정과목 목록")
+            all_accounts = {}
+            for data in financial_data_list:
+                if data and 'list' in data:
+                    for item in data['list']:
+                        if 'account_id' in item and 'account_nm' in item:
+                            all_accounts[item['account_id']] = item['account_nm']
 
-        if all_accounts:
-            st.write(f"총 계정과목 수: {len(all_accounts)}")
-            account_df = pd.DataFrame([
-                {"계정ID": k, "계정명": v} for k, v in all_accounts.items()
-            ])
-            st.dataframe(account_df)
+            if all_accounts:
+                st.write(f"총 계정과목 수: {len(all_accounts)}")
+                account_df = pd.DataFrame([
+                    {"계정ID": k, "계정명": v} for k, v in all_accounts.items()
+                ])
+                st.dataframe(account_df)
 
         return result
     

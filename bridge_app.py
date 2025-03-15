@@ -147,35 +147,34 @@ class BridgeApp:
         for metric, score in scores.items():
             st.metric(label=metric, value=f"{score}/100")
    
-    def display_financial_info(self, corp_code):
-        """재무 정보 표시
+    def _load_financial_data(self, corp_code):
+        """재무 데이터 로드하는 헬퍼 함수
         
         Args:
             corp_code (str): 기업 고유 코드
+            
+        Returns:
+            tuple: (재무 데이터, 유효 데이터 존재 여부)
         """
-        st.subheader("재무 정보")
-        
-        # 연도 선택 - 세션 상태 사용
+        # 세션 상태에 재무 데이터가 있으면 재사용
+        if 'financial_data' in st.session_state and 'last_year' in st.session_state and st.session_state.last_year == st.session_state.selected_year:
+            return st.session_state.financial_data, True
+            
+        # 연도 설정
         current_year = datetime.now().year
-        year = st.selectbox(
-            "기준 연도:", 
-            list(range(current_year-5, current_year)), 
-            index=list(range(current_year-5, current_year)).index(st.session_state.selected_year),
-            on_change=self.on_year_change,
-            args=(st.session_state.selected_year,)
-        )
-        
-        # 연도가 변경되었으면 상태 업데이트
-        if year != st.session_state.selected_year:
-            self.on_year_change(year)
-        
-        # 3개년 재무제표 데이터 가져오기
+        year = st.session_state.selected_year
         years = [year-2, year-1, year]
+        
+        # 데이터 초기화
         financial_data_list = []
         valid_years = []
         valid_financial_data_list = []
         
-        for yr in years:
+        # 데이터 로딩 진행 표시
+        progress_bar = st.progress(0, "재무 데이터 로딩 중...")
+        
+        # 3개년 재무제표 데이터 가져오기
+        for i, yr in enumerate(years):
             with st.spinner(f"{yr}년 재무제표 조회 중..."):
                 fin_data = self.dart_api.get_financial_statements(corp_code, str(yr))
                 financial_data_list.append(fin_data)
@@ -184,20 +183,76 @@ class BridgeApp:
                 if fin_data and 'list' in fin_data and len(fin_data['list']) > 0:
                     valid_financial_data_list.append(fin_data)
                     valid_years.append(yr)
-                    st.success(f"{yr}년 데이터 조회 완료 ({len(fin_data['list'])}개 항목)")
-                else:
-                    st.warning(f"{yr}년 데이터가 없습니다.")
+                
+                # 진행률 업데이트
+                progress_bar.progress((i + 1) / len(years), f"{yr}년 데이터 로딩 완료")
 
+        # 진행바 완료 후 제거
+        progress_bar.empty()
+        
         # 유효한 데이터가 없으면 안내 메시지 출력
         if not valid_financial_data_list:
-            st.error("조회 가능한 재무 데이터가 없습니다.")
-            return
+            return None, False
 
         # 유효한 데이터만으로 재무 분석 진행
         financial_data = self.financial_analyzer.process_financial_data(valid_financial_data_list, valid_years)
-
+        
+        # 세션 상태에 저장
+        st.session_state.financial_data = financial_data
+        st.session_state.last_year = st.session_state.selected_year
+        
+        return financial_data, True
+    
+    def _year_selector(self, tab_name):
+        """연도 선택 UI 표시
+        
+        Args:
+            tab_name (str): 탭 이름 (고유 키 생성에 사용)
+        
+        Returns:
+            bool: 연도가 변경되었는지 여부
+        """
+        current_year = datetime.now().year
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            year = st.selectbox(
+                "기준 연도:", 
+                list(range(current_year-5, current_year)), 
+                index=list(range(current_year-5, current_year)).index(st.session_state.selected_year),
+                key=f"year_select_{tab_name}"  # 고유한 키 추가
+            )
+        
+        with col2:
+            if st.button("조회", use_container_width=True, key=f"load_btn_{tab_name}"):  # 고유한 키 추가
+                self.on_year_change(year)
+                # 재무 데이터 초기화 (새로운 연도 선택 시)
+                if 'financial_data' in st.session_state:
+                    del st.session_state.financial_data
+                    
+                return True
+        
+        return False
+    
+    def display_financial_statements(self, corp_code):
+        """재무제표 정보 표시
+        
+        Args:
+            corp_code (str): 기업 고유 코드
+        """
+        st.subheader("재무상태표 및 손익계산서")
+        
+        # 연도 선택기 표시 (고유 키 전달)
+        year_changed = self._year_selector("financial_statements")
+        
+        # 데이터 로드
+        financial_data, success = self._load_financial_data(corp_code)
+        if not success:
+            st.error("조회 가능한 재무 데이터가 없습니다.")
+            return
+            
         # 자산/부채/자본 그래프
-        st.subheader("재무상태")
+        st.subheader("재무상태표")
         balance_df = pd.DataFrame({
             "연도": [str(y) for y in financial_data["years"]],
             "자산": financial_data["assets"],
@@ -205,6 +260,10 @@ class BridgeApp:
             "자본": financial_data["equity"]
         })
         
+        # 표 형태로 데이터 표시
+        st.dataframe(balance_df, hide_index=True, use_container_width=True)
+        
+        # 그래프 표시
         fig1 = px.bar(
             balance_df, 
             x="연도", 
@@ -216,7 +275,7 @@ class BridgeApp:
         st.plotly_chart(fig1, use_container_width=True)
         
         # 매출/이익 그래프
-        st.subheader("손익 현황")
+        st.subheader("손익계산서")
         income_df = pd.DataFrame({
             "연도": [str(y) for y in financial_data["years"]],
             "매출액": financial_data["revenue"],
@@ -224,6 +283,10 @@ class BridgeApp:
             "당기순이익": financial_data["net_income"]
         })
         
+        # 표 형태로 데이터 표시
+        st.dataframe(income_df, hide_index=True, use_container_width=True)
+        
+        # 그래프 표시
         fig2 = px.line(
             income_df, 
             x="연도", 
@@ -233,25 +296,158 @@ class BridgeApp:
             markers=True
         )
         st.plotly_chart(fig2, use_container_width=True)
+    
+    def display_financial_ratios(self, corp_code):
+        """재무 비율 정보 표시
+        
+        Args:
+            corp_code (str): 기업 고유 코드
+        """
+        st.subheader("재무 비율 분석")
+        
+        # 연도 선택기 표시 (고유 키 전달)
+        year_changed = self._year_selector("financial_ratios")
+        
+        # 데이터 로드
+        financial_data, success = self._load_financial_data(corp_code)
+        if not success:
+            st.error("조회 가능한 재무 데이터가 없습니다.")
+            return
         
         # 재무 비율 계산 및 표시
-        st.subheader("주요 재무 비율")
         ratios = self.financial_analyzer.calculate_financial_ratios(financial_data)
         ratio_df = pd.DataFrame(ratios)
-        st.dataframe(ratio_df, hide_index=True)
         
-        # 가치 평가
-        st.subheader("간단 가치 평가")
+        # 표 형태로 데이터 표시
+        st.dataframe(ratio_df, hide_index=True, use_container_width=True)
+        
+        # 주요 비율 그래프로 표시
+        # 1. 수익성 비율 (영업이익률, 순이익률)
+        profit_ratios = pd.DataFrame({
+            "연도": ratio_df["연도"],
+            "영업이익률": [float(r.strip('%')) if r != '-' else 0 for r in ratio_df["영업이익률"]],
+            "순이익률": [float(r.strip('%')) if r != '-' else 0 for r in ratio_df["순이익률"]]
+        })
+        
+        fig1 = px.line(
+            profit_ratios,
+            x="연도",
+            y=["영업이익률", "순이익률"],
+            title="수익성 비율 추이",
+            labels={"value": "비율 (%)", "variable": "항목"},
+            markers=True
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+        
+        # 2. 성장성 비율 (매출 성장률)
+        growth_ratios = pd.DataFrame({
+            "연도": ratio_df["연도"],
+            "매출 성장률": [float(r.strip('%')) if r != '-' else 0 for r in ratio_df["매출 성장률"]]
+        })
+        
+        fig2 = px.bar(
+            growth_ratios,
+            x="연도",
+            y="매출 성장률",
+            title="매출 성장률 추이",
+            labels={"매출 성장률": "성장률 (%)"},
+            color="매출 성장률",
+            color_continuous_scale=["red", "yellow", "green"]
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+        
+        # 3. 안정성 및 효율성 비율 (부채비율, ROE)
+        stability_ratios = pd.DataFrame({
+            "연도": ratio_df["연도"],
+            "부채비율": [float(r.strip('%')) if r != '-' else 0 for r in ratio_df["부채비율"]],
+            "ROE": [float(r.strip('%')) if r != '-' else 0 for r in ratio_df["ROE"]]
+        })
+        
+        fig3 = px.bar(
+            stability_ratios,
+            x="연도",
+            y=["부채비율", "ROE"],
+            barmode="group",
+            title="부채비율 및 ROE 추이",
+            labels={"value": "비율 (%)", "variable": "항목"}
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+        
+    def display_valuation(self, corp_code):
+        """기업 가치 평가 정보 표시
+        
+        Args:
+            corp_code (str): 기업 고유 코드
+        """
+        st.subheader("기업 가치 평가")
+        
+        # 연도 선택기 표시 (고유 키 전달)
+        year_changed = self._year_selector("valuation")
+        
+        # 데이터 로드
+        financial_data, success = self._load_financial_data(corp_code)
+        if not success:
+            st.error("조회 가능한 재무 데이터가 없습니다.")
+            return
         
         # 가치 평가 결과
         valuation_results = self.financial_analyzer.calculate_valuation(financial_data)
-        valuation_df = pd.DataFrame(valuation_results["valuations"])
-        st.dataframe(valuation_df, hide_index=True)
         
-        # 가치 평가 범위
+        # 값 추출
         min_value, max_value = valuation_results["range"]
         if min_value > 0 or max_value > 0:
-            st.write(f"**추정 기업 가치 범위: {min_value:,.0f}백만원 ~ {max_value:,.0f}백만원**")
+            # 가치 평가 범위를 시각적으로 표현
+            st.subheader("기업 가치 범위")
+            st.metric(
+                label="추정 가치 범위 (백만원)", 
+                value=f"{(min_value + max_value) / 2:,.0f}", 
+                delta=f"{max_value - min_value:,.0f} 범위"
+            )
+            
+            # 게이지 차트로 표현
+            avg_value = (min_value + max_value) / 2
+            
+            # 상세 평가 결과 테이블
+            st.subheader("평가 방법별 가치")
+            valuation_df = pd.DataFrame(valuation_results["valuations"])
+            st.dataframe(valuation_df, hide_index=True, use_container_width=True)
+            
+            # 평가 방법별 차트
+            try:
+                # 숫자 형식으로 변환
+                values = []
+                methods = []
+                for val in valuation_results["valuations"]:
+                    if val["추정 가치 (백만원)"] != "N/A":
+                        values.append(float(val["추정 가치 (백만원)"].replace(",", "")))
+                        methods.append(val["평가 방법"])
+                
+                if values:
+                    valuation_chart_df = pd.DataFrame({
+                        "평가 방법": methods,
+                        "추정 가치 (백만원)": values
+                    })
+                    
+                    fig = px.bar(
+                        valuation_chart_df,
+                        x="평가 방법",
+                        y="추정 가치 (백만원)",
+                        title="평가 방법별 기업 가치",
+                        color="평가 방법"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.warning(f"차트 생성 중 오류 발생: {e}")
+            
+            # 추가 설명
+            st.info("""
+            **참고 사항:**
+            - PER 기준 가치: 당기순이익 × 업종 평균 PER(15배)
+            - EBITDA Multiple 기준 가치: 영업이익의 120% × 업종 평균 EBITDA Multiple(8배)
+            - 순자산 가치: 총자본
+            
+            이 평가는 간단한 예시이며, 실제 M&A 가치 평가는 더 복잡한 요소들을 고려해야 합니다.
+            """)
         else:
             st.warning("가치 평가에 필요한 재무 데이터가 충분하지 않습니다.")
     
@@ -300,13 +496,21 @@ class BridgeApp:
             # 선택된 기업 정보 헤더 표시
             st.markdown(f"## 선택된 기업: {st.session_state.company_info.get('corp_name', '알 수 없음')} ({st.session_state.selected_company.get('stock_code', '')})")
 
-            # 기본 정보와 재무 정보를 나란히 표시
-            col1, col2 = st.columns([1, 2])
-
-            # 기업 기본 정보 표시
-            with col1:
+            # 탭 생성
+            tabs = st.tabs(["기업 개요", "재무 현황", "재무 비율", "가치 평가"])
+            
+            # 탭 1: 기업 개요
+            with tabs[0]:
                 self.display_company_info(st.session_state.company_info)
-
-            # 재무 정보 표시
-            with col2:
-                self.display_financial_info(st.session_state.selected_company["corp_code"])
+                
+            # 탭 2: 재무 현황
+            with tabs[1]:
+                self.display_financial_statements(st.session_state.selected_company["corp_code"])
+                
+            # 탭 3: 재무 비율
+            with tabs[2]:
+                self.display_financial_ratios(st.session_state.selected_company["corp_code"])
+                
+            # 탭 4: 가치 평가
+            with tabs[3]:
+                self.display_valuation(st.session_state.selected_company["corp_code"])
