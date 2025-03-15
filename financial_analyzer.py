@@ -52,7 +52,7 @@ class FinancialAnalyzer:
                       "ifrs-full_Sales", "ifrs_Sales", "Sales"],
             "영업이익": ["ifrs-full_OperatingIncome", "ifrs_OperatingIncome", "OperatingIncome", 
                         "ifrs-full_ProfitLossFromOperatingActivities", "ifrs_ProfitLossFromOperatingActivities",
-                        "ProfitLossFromOperatingActivities"],
+                        "ProfitLossFromOperatingActivities", "dart_OperatingIncomeLoss"],
             "당기순이익": ["ifrs-full_ProfitLoss", "ifrs_ProfitLoss", "ProfitLoss", 
                          "ifrs-full_ProfitLossAttributableToOwnersOfParent", "ifrs_ProfitLossAttributableToOwnersOfParent", 
                          "ProfitLossAttributableToOwnersOfParent", "ifrs-full_NetIncome", "ifrs_NetIncome", "NetIncome"]
@@ -117,15 +117,15 @@ class FinancialAnalyzer:
                                     if key == "자산" and year_result["assets"] == 0:
                                         year_result["assets"] = value // 1000000  # 백만원 단위로 변환
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
                                     elif key == "부채" and year_result["liabilities"] == 0:
                                         year_result["liabilities"] = value // 1000000
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
                                     elif key == "자본" and year_result["equity"] == 0:
                                         year_result["equity"] = value // 1000000
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
                                 except (ValueError, TypeError) as e:
                                     st.write(f"❌ {key} 처리 오류: {e}")
 
@@ -136,15 +136,15 @@ class FinancialAnalyzer:
                                     if key == "매출액" and year_result["revenue"] == 0:
                                         year_result["revenue"] = value // 1000000
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
                                     elif key == "영업이익" and year_result["operating_profit"] == 0:
                                         year_result["operating_profit"] = value // 1000000
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
                                     elif key == "당기순이익" and year_result["net_income"] == 0:
                                         year_result["net_income"] = value // 1000000
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} = {value // 1000000}백만원")
+                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
                                 except (ValueError, TypeError) as e:
                                     st.write(f"❌ {key} 처리 오류: {e}")
 
@@ -157,9 +157,13 @@ class FinancialAnalyzer:
                     # 유사한 계정과목 찾기
                     similar_accounts = []
                     for act_id, act_nm in unique_accounts.items():
-                        for pattern in accounts[key]:
-                            if pattern.lower() in act_id.lower():
-                                similar_accounts.append(f"{act_id} ({act_nm})")
+                        # 계정ID가 키워드를 포함하는지 또는 계정명이 키워드를 포함하는지 확인
+                        match_id = any(pattern.lower() in act_id.lower() for pattern in accounts[key])
+                        match_name = any(key_term in act_nm for key_term in [key, "이익", "자산", "부채", "자본", "매출"])
+                        
+                        if match_id or match_name:
+                            similar_accounts.append(f"{act_id} ({act_nm})")
+                    
                     if similar_accounts:
                         st.write(f"    유사 계정과목: {', '.join(similar_accounts[:5])}")
 
