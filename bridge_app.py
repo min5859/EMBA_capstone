@@ -20,7 +20,8 @@ class BridgeApp:
         
         # 세션 상태 초기화
         if 'api_key' not in st.session_state:
-            st.session_state.api_key = ""
+            # DartAPI 클래스를 통해 환경변수에서 API 키 로드
+            st.session_state.api_key = DartAPI.get_api_key_from_env()
         
         if 'corp_code_data' not in st.session_state:
             st.session_state.corp_code_data = None
@@ -47,17 +48,31 @@ class BridgeApp:
         이 애플리케이션은 Open DART API를 활용하여 기업 정보를 조회하는 POC입니다.
         """)
         
-        # API 키 입력 처리
-        api_key = st.sidebar.text_input("OPEN DART API KEY를 입력하세요", type="password", key="dart_api_key")
-        if api_key:
-            st.session_state.api_key = api_key
-            self.dart_api = DartAPI(api_key)
-        
-        # API 키 상태 표시
-        if st.session_state.api_key:
-            st.sidebar.success("API 키가 입력되었습니다.")
+        # API 키 상태 체크
+        if not st.session_state.api_key:
+            # API 키가 없을 경우에만 입력 필드 표시
+            api_key = st.sidebar.text_input(
+                "OPEN DART API KEY를 입력하세요", 
+                type="password", 
+                key="dart_api_key",
+                help="API 키는 DART OpenAPI 사이트에서 발급받을 수 있습니다. .env 파일에 설정하면 자동으로 로드됩니다."
+            )
+            if api_key:
+                st.session_state.api_key = api_key
+                self.dart_api = DartAPI(api_key)
+                st.sidebar.success("API 키가 설정되었습니다.")
+                # 입력 필드 숨기기 위한 재실행
+                st.experimental_rerun()
         else:
-            st.sidebar.warning("API 키를 입력해주세요.")
+            # API 키가 이미 있는 경우
+            st.sidebar.success("API 키가 설정되어 있습니다.")
+            # API 키 재설정 옵션
+            if st.sidebar.button("API 키 재설정"):
+                st.session_state.api_key = ""
+                st.rerun()
+            
+            # DartAPI 초기화
+            self.dart_api = DartAPI(st.session_state.api_key)
     
     def search_companies(self, keyword):
         """키워드로 기업 검색

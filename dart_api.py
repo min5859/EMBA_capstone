@@ -3,22 +3,40 @@ import logging
 import zipfile
 import io
 import xml.etree.ElementTree as ET
+import os
+from dotenv import load_dotenv
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bridge")
 
+# .env 파일 로드
+load_dotenv()
+
 class DartAPI:
     """DART OpenAPI와 상호작용하는 클래스"""
     
-    def __init__(self, api_key):
+    def __init__(self, api_key=None):
         """DART API 클래스 초기화
         
         Args:
-            api_key (str): DART OpenAPI 키
+            api_key (str, optional): DART OpenAPI 키. 없으면 환경변수에서 로드
         """
-        self.api_key = api_key
+        # API 키 설정 (파라미터로 전달받은 키, 환경변수 순으로 확인)
+        self.api_key = api_key if api_key else os.getenv("DART_API_KEY", "")
         self.base_url = "https://opendart.fss.or.kr/api"
+        
+        if not self.api_key:
+            logger.warning("API 키가 설정되지 않았습니다. 환경변수 또는 직접 입력이 필요합니다.")
+    
+    @staticmethod
+    def get_api_key_from_env():
+        """환경변수에서 API 키 가져오기
+        
+        Returns:
+            str: 환경변수에서 가져온 API 키, 없으면 빈 문자열
+        """
+        return os.getenv("DART_API_KEY", "")
     
     def get_corp_codes(self):
         """기업 코드 목록 조회
