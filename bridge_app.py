@@ -7,6 +7,7 @@ from dart_api import DartAPI
 from financial_analyzer import FinancialAnalyzer
 from llm_analyzer import LLMAnalyzer
 import json
+from display_valuation import display_valuation_results
 
 class BridgeApp:
     """Bridge M&A 분석 애플리케이션 클래스"""
@@ -553,7 +554,7 @@ class BridgeApp:
                         # 시각화 함수 호출
                         valuation_data = result.get("valuation_data")
                         if valuation_data:
-                            self.llm_analyzer.display_valuation_results(valuation_data)
+                            display_valuation_results(valuation_data)
 
                             # 결과 다운로드 버튼 추가
                             st.download_button(
@@ -669,7 +670,7 @@ class BridgeApp:
         
         # 기업 검색 섹션
         with st.expander("기업 검색", expanded=not st.session_state.selected_company):
-            search_keyword = st.text_input("기업명을 입력하세요:")
+            search_keyword = st.text_input("기업명을 입력하세요:", value="삼성전자")
             companies = self.search_companies(search_keyword)
 
             if companies:

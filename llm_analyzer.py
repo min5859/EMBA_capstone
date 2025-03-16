@@ -143,7 +143,7 @@ class LLMAnalyzer:
                 경쟁사 평균 PBR: {industry_info.get('avg_pbr', '알 수 없음')}
                 """
             
-            # LLM 프롬프트 구성 - JSON 응답 요청
+            # LLM 프롬프트 구성 - 설명이 포함된 JSON 응답 요청
             prompt = f"""
             # 기업 정보
             기업명: {company_name}
@@ -161,29 +161,60 @@ class LLMAnalyzer:
             다음 형식으로 분석해주세요:
             
             1. EBITDA와 DCF 두가지 방식으로 보수적, 기본, 낙관적 3가지로 기업가치를 평가
-            2. 결과는 반드시 다음 JSON 구조로만 출력할 것:
+            2. 결과는 다음 JSON 구조로 출력하되, 계산 과정과 가정에 대한 설명도 포함할 것:
             
             {{
               "company": "{company_name}",
               "ebitda_valuation": {{
-                "conservative": 값(숫자만),
-                "base": 값(숫자만),
-                "optimistic": 값(숫자만)
+                "conservative": 숫자값,
+                "base": 숫자값,
+                "optimistic": 숫자값
               }},
               "dcf_valuation": {{
-                "conservative": 값(숫자만),
-                "base": 값(숫자만),
-                "optimistic": 값(숫자만)
-              }}
+                "conservative": 숫자값,
+                "base": 숫자값,
+                "optimistic": 숫자값
+              }},
+              "assumptions": {{
+                "ebitda_multipliers": {{
+                  "conservative": 숫자값,
+                  "base": 숫자값,
+                  "optimistic": 숫자값
+                }},
+                "discount_rates": {{
+                  "conservative": 숫자값,
+                  "base": 숫자값,
+                  "optimistic": 숫자값
+                }},
+                "growth_rates": {{
+                  "conservative": 숫자값,
+                  "base": 숫자값,
+                  "optimistic": 숫자값
+                }},
+                "terminal_growth_rates": {{
+                  "conservative": 숫자값,
+                  "base": 숫자값,
+                  "optimistic": 숫자값
+                }}
+              }},
+              "calculations": {{
+                "average_ebitda": 숫자값,
+                "ebitda_description": "EBITDA 계산 방식에 대한 설명",
+                "dcf_description": "DCF 계산 방식에 대한 간략한 설명"
+              }},
+              "summary": "기업 가치 평가에 대한 종합적인 분석 및 설명"
             }}
             
-            중요: 결과는 반드시 위와 같은 JSON 구조로만 출력하세요. 설명이나 다른 텍스트는 포함하지 마세요.
-            값은 단위 없이 숫자만 출력하세요.
+            중요:
+            1. 각 시나리오별 계산에 사용된 가정(EBITDA 승수, 할인율, 성장률 등)을 명확히 포함할 것
+            2. EBITDA와 DCF 계산 방식에 대한 간략한 설명 포함
+            3. JSON 구조는 유지하되, 각 항목에 대한 설명을 포함하여 결과의 신뢰성 제공
+            4. 값은 단위 없이 숫자만 출력(예: 1000000, 275000000)
             """
             
             # OpenAI API 호출
             response = openai.chat.completions.create(
-                model="gpt-4-turbo",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "당신은 기업 가치 평가와 M&A 분석을 전문으로 하는 금융 애널리스트입니다. JSON 형식으로 정확한 값만 출력합니다."},
                     {"role": "user", "content": prompt}
@@ -286,7 +317,7 @@ class LLMAnalyzer:
             
             # OpenAI API 호출
             response = openai.chat.completions.create(
-                model="gpt-4-turbo",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "당신은 기업 재무 및 투자 분석을 전문으로 하는 애널리스트입니다. 데이터에 기반한 객관적인 답변을 제공합니다."},
                     {"role": "user", "content": prompt}
@@ -309,212 +340,3 @@ class LLMAnalyzer:
                 "status": "error",
                 "message": f"분석 중 오류가 발생했습니다: {str(e)}"
             }
-    
-    @staticmethod
-    def display_valuation_results(valuation_data):
-        """Streamlit에서 기업가치 평가 결과 시각화
-        
-        Args:
-            valuation_data (dict): 기업가치 평가 결과
-        """
-        if not valuation_data:
-            st.error("기업가치 평가 데이터가 없습니다.")
-            return
-        
-        company_name = valuation_data.get("company", "기업명 없음")
-        ebitda_valuation = valuation_data.get("ebitda_valuation", {})
-        dcf_valuation = valuation_data.get("dcf_valuation", {})
-        
-        st.subheader(f"{company_name} 기업가치 평가 결과")
-        
-        # 데이터 준비
-        scenarios = ["보수적", "기본", "낙관적"]
-        ebitda_values = [
-            ebitda_valuation.get("conservative", 0) / 1000000,
-            ebitda_valuation.get("base", 0) / 1000000,
-            ebitda_valuation.get("optimistic", 0) / 1000000
-        ]
-        dcf_values = [
-            dcf_valuation.get("conservative", 0) / 1000000,
-            dcf_valuation.get("base", 0) / 1000000,
-            dcf_valuation.get("optimistic", 0) / 1000000
-        ]
-        
-        # 데이터프레임 생성
-        df = pd.DataFrame({
-            "시나리오": scenarios * 2,
-            "평가방식": ["EBITDA"] * 3 + ["DCF"] * 3,
-            "기업가치(조원)": ebitda_values + dcf_values
-        })
-        
-        # 1. Plotly 차트 - 막대 그래프
-        st.subheader("기업가치 평가 비교")
-        
-        fig = px.bar(
-            df, 
-            x="시나리오", 
-            y="기업가치(조원)", 
-            color="평가방식", 
-            barmode="group",
-            text_auto='.1f',
-            color_discrete_map={"EBITDA": "#4472C4", "DCF": "#ED7D31"},
-            title=f"{company_name} 기업가치 평가 (단위: 조원)"
-        )
-        
-        fig.update_layout(
-            font=dict(family="Arial", size=14),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            height=500
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # 2. 평가 결과 테이블
-        st.subheader("평가 방식별 기업가치 (단위: 백만원)")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("### EBITDA 방식")
-            st.dataframe({
-                "시나리오": scenarios,
-                "기업가치": [
-                    f"{ebitda_valuation.get('conservative', 0):,}",
-                    f"{ebitda_valuation.get('base', 0):,}",
-                    f"{ebitda_valuation.get('optimistic', 0):,}"
-                ]
-            })
-        
-        with col2:
-            st.markdown("### DCF 방식")
-            st.dataframe({
-                "시나리오": scenarios,
-                "기업가치": [
-                    f"{dcf_valuation.get('conservative', 0):,}",
-                    f"{dcf_valuation.get('base', 0):,}",
-                    f"{dcf_valuation.get('optimistic', 0):,}"
-                ]
-            })
-        
-        # 3. 방사형 차트 - 시나리오별 평가 비교
-        st.subheader("시나리오별 평가 비교")
-        
-        # 데이터 정규화 (최대값 기준)
-        max_value = max(max(ebitda_values), max(dcf_values))
-        ebitda_norm = [val / max_value for val in ebitda_values]
-        dcf_norm = [val / max_value for val in dcf_values]
-        
-        # 방사형 차트 생성
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatterpolar(
-            r=ebitda_norm + [ebitda_norm[0]],
-            theta=scenarios + [scenarios[0]],
-            fill='toself',
-            name='EBITDA 방식',
-            line_color='#4472C4'
-        ))
-        
-        fig.add_trace(go.Scatterpolar(
-            r=dcf_norm + [dcf_norm[0]],
-            theta=scenarios + [scenarios[0]],
-            fill='toself',
-            name='DCF 방식',
-            line_color='#ED7D31'
-        ))
-        
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 1]
-                )
-            ),
-            showlegend=True,
-            height=500
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # 4. 요약 메트릭
-        st.subheader("기업가치 평가 요약")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        # 기본 시나리오 평균값
-        avg_base = (ebitda_valuation.get("base", 0) + dcf_valuation.get("base", 0)) / 2
-        
-        with col1:
-            st.metric(
-                label="EBITDA 평균 기업가치", 
-                value=f"{sum(ebitda_values) / 3:.2f} 조원",
-                delta=f"{(ebitda_valuation.get('base', 0) - avg_base) / 1000000:.2f} 조원"
-            )
-        
-        with col2:
-            st.metric(
-                label="DCF 평균 기업가치", 
-                value=f"{sum(dcf_values) / 3:.2f} 조원",
-                delta=f"{(dcf_valuation.get('base', 0) - avg_base) / 1000000:.2f} 조원"
-            )
-        
-        with col3:
-            st.metric(
-                label="종합 평균 기업가치", 
-                value=f"{(sum(ebitda_values) + sum(dcf_values)) / 6:.2f} 조원"
-            )
-        
-        # 5. 원본 JSON 데이터 (접은 상태로 표시)
-        with st.expander("원본 JSON 데이터"):
-            st.json(valuation_data)
-
-
-# Streamlit 애플리케이션 예시 코드
-def streamlit_example():
-    st.title("기업 가치 평가 시스템")
-    
-    # API 키 설정
-    api_key = st.sidebar.text_input("OpenAI API 키", type="password")
-    
-    # 업로드된 파일이나 샘플 데이터로 분석
-    company_info = {
-        "corp_name": "삼성전자(주)",
-        "induty_code": "264",
-        "induty": "반도체 및 전자부품 제조"
-    }
-    
-    financial_data = {
-        "years": [2022, 2023, 2024],
-        "assets": [448424507, 455905980, 514531948],
-        "liabilities": [93674903, 92228115, 112339878],
-        "equity": [345186142, 363677865, 402192070],
-        "revenue": [302231360, 258935494, 300870903],
-        "operating_profit": [43376630, 6566976, 32725961],
-        "net_income": [55654077, 15487100, 34451351]
-    }
-    
-    industry_info = {
-        "sector": "전자/반도체",
-        "avg_per": 15.2,
-        "avg_pbr": 1.8
-    }
-    
-    if st.sidebar.button("기업가치 평가 실행"):
-        with st.spinner("기업가치를 평가 중입니다..."):
-            analyzer = LLMAnalyzer()
-            if api_key:
-                analyzer.set_api_key(api_key)
-            
-            result = analyzer.analyze_company_value(company_info, financial_data, industry_info)
-            
-            if result["status"] == "success":
-                valuation_data = result.get("valuation_data")
-                LLMAnalyzer.display_valuation_results(valuation_data)
-            else:
-                st.error(result["message"])
-                if "raw_content" in result:
-                    st.warning("LLM 응답 (JSON 파싱 불가):")
-                    st.text(result["raw_content"])
-
-if __name__ == "__main__":
-    streamlit_example()
