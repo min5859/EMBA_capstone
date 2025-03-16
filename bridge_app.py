@@ -6,6 +6,7 @@ from datetime import datetime
 from dart_api import DartAPI
 from financial_analyzer import FinancialAnalyzer
 from llm_analyzer import LLMAnalyzer
+import json
 
 class BridgeApp:
     """Bridge M&A 분석 애플리케이션 클래스"""
@@ -534,20 +535,35 @@ class BridgeApp:
 
                     if result["status"] == "success":
                         # 결과를 세션 상태에 저장
-                        st.session_state.llm_analysis_result = result["analysis"]
+                        #st.session_state.llm_analysis_result = result["analysis"]
 
                         # 분석 결과 표시
                         st.success("AI 분석이 완료되었습니다!")
                         st.markdown("## AI 기업 가치 평가 결과")
-                        st.markdown(result["analysis"])
+                        #st.markdown(result["analysis"])
 
-                        # 분석 결과 다운로드 버튼
-                        st.download_button(
-                            label="분석 결과 다운로드 (TXT)",
-                            data=result["analysis"],
-                            file_name=f"{company_info.get('corp_name', '기업')}_AI분석_{datetime.now().strftime('%Y%m%d')}.txt",
-                            mime="text/plain"
-                        )
+                        ## 분석 결과 다운로드 버튼
+                        #st.download_button(
+                        #    label="분석 결과 다운로드 (TXT)",
+                        #    data=result["analysis"],
+                        #    file_name=f"{company_info.get('corp_name', '기업')}_AI분석_{datetime.now().strftime('%Y%m%d')}.txt",
+                        #    mime="text/plain"
+                        #)
+
+                        # 시각화 함수 호출
+                        valuation_data = result.get("valuation_data")
+                        if valuation_data:
+                            self.llm_analyzer.display_valuation_results(valuation_data)
+
+                            # 결과 다운로드 버튼 추가
+                            st.download_button(
+                                label="결과 JSON 다운로드",
+                                data=json.dumps(valuation_data, indent=2, ensure_ascii=False),
+                                file_name=f"{company_info['corp_name']}_valuation.json",
+                                mime="application/json"
+                            )
+                        else:
+                            st.error("기업 가치 평가 결과를 가져오지 못했습니다.")
                     else:
                         st.error(f"분석 중 오류가 발생했습니다: {result.get('message', '알 수 없는 오류')}")
 
