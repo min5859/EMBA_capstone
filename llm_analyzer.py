@@ -24,7 +24,7 @@ class LLMAnalyzer:
     def __init__(self):
         """LLM 분석기 클래스 초기화"""
         # OpenAI API 키 설정
-        self.api_key = os.getenv("OPENAI_API_KEY", "")
+        self.api_key = st.secrets["OPENAI_API_KEY"]
         if not self.api_key:
             logger.warning("OPENAI_API_KEY가 설정되지 않았습니다. 환경변수 또는 직접 입력이 필요합니다.")
         
@@ -48,7 +48,7 @@ class LLMAnalyzer:
         Returns:
             str: 환경변수에서 가져온 API 키, 없으면 빈 문자열
         """
-        return os.getenv("OPENAI_API_KEY", "")
+        return st.secrets["OPENAI_API_KEY"]
     
     def analyze_company_value(self, company_info, financial_data, industry_info=None):
         """LLM을 이용한 기업 가치 분석

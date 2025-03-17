@@ -5,6 +5,7 @@ import io
 import xml.etree.ElementTree as ET
 import os
 from dotenv import load_dotenv
+import streamlit as st
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -23,7 +24,7 @@ class DartAPI:
             api_key (str, optional): DART OpenAPI 키. 없으면 환경변수에서 로드
         """
         # API 키 설정 (파라미터로 전달받은 키, 환경변수 순으로 확인)
-        self.api_key = api_key if api_key else os.getenv("DART_API_KEY", "")
+        self.api_key = api_key if api_key else st.secrets["DART_API_KEY"]
         self.base_url = "https://opendart.fss.or.kr/api"
         
         if not self.api_key:
@@ -36,7 +37,7 @@ class DartAPI:
         Returns:
             str: 환경변수에서 가져온 API 키, 없으면 빈 문자열
         """
-        return os.getenv("DART_API_KEY", "")
+        return st.secrets["DART_API_KEY"]
     
     def get_corp_codes(self):
         """기업 코드 목록 조회
