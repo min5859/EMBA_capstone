@@ -6,3 +6,4 @@ plotly
 requests
 python-dotenv
 matplotlib
+langchain
