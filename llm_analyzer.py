@@ -13,6 +13,7 @@ from plotly.subplots import make_subplots
 from langchain.llms import Ollama
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from anthropic import Anthropic
 
 # .env 파일 로드
 load_dotenv()
@@ -229,6 +230,192 @@ class GemmaAnalyzer(BaseAnalyzer):
             
         except Exception as e:
             logger.error(f"Gemma 분석 오류: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"분석 중 오류가 발생했습니다: {str(e)}"
+            }
+
+class Gemma3Analyzer(BaseAnalyzer):
+    """Gemma 3 27B를 이용한 기업 가치 분석을 위한 클래스"""
+    
+    def __init__(self):
+        """Gemma3 분석기 클래스 초기화"""
+        self.llm = Ollama(
+            model="gemma3:27b",
+            callback_manager=CallbackManager([StreamingStdOutCallbackHandler()]),
+            temperature=0.2
+        )
+    
+    def analyze_company_value(self, company_info, financial_data, industry_info=None):
+        """Gemma3를 이용한 기업 가치 분석"""
+        try:
+            # 데이터 준비
+            finances, ratios = self._prepare_financial_data(financial_data)
+            sector_info = self._prepare_industry_info(industry_info)
+            
+            # 프롬프트 생성
+            prompt = self._create_valuation_prompt(company_info, finances, ratios, sector_info)
+            
+            # Gemma3 모델 호출
+            response = self.llm(prompt)
+            
+            # 응답 파싱
+            return self._parse_llm_response(response)
+            
+        except Exception as e:
+            logger.error(f"Gemma3 분석 오류: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"분석 중 오류가 발생했습니다: {str(e)}"
+            }
+    
+    def analyze_investment_potential(self, company_info, financial_data, specific_question):
+        """특정 질문에 대한 투자 잠재력 분석"""
+        try:
+            # 회사 정보 추출
+            company_name = company_info.get('corp_name', '알 수 없음')
+            
+            # 재무 정보 준비
+            finances, _ = self._prepare_financial_data(financial_data)
+            
+            # 프롬프트 구성
+            prompt = f"""
+            다음은 {company_name} 기업의 재무 정보입니다:
+            
+            {json.dumps(finances, ensure_ascii=False, indent=2)}
+            
+            위 정보를 바탕으로 다음 질문에 답변해주세요:
+            
+            {specific_question}
+            
+            객관적인 데이터를 바탕으로 명확하게 답변해주세요.
+            """
+            
+            # Gemma3 모델 호출
+            response = self.llm(prompt)
+            
+            return {
+                "status": "success",
+                "analysis": response
+            }
+            
+        except Exception as e:
+            logger.error(f"Gemma3 분석 오류: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"분석 중 오류가 발생했습니다: {str(e)}"
+            }
+
+class ClaudeAnalyzer(BaseAnalyzer):
+    """Claude를 이용한 기업 가치 분석을 위한 클래스"""
+    
+    def __init__(self):
+        """Claude 분석기 클래스 초기화"""
+        self.api_key = st.secrets.get("ANTHROPIC_API_KEY")
+        if not self.api_key:
+            logger.warning("ANTHROPIC_API_KEY가 설정되지 않았습니다. 환경변수 또는 직접 입력이 필요합니다.")
+        else:
+            self.client = Anthropic(api_key=self.api_key)
+    
+    def set_api_key(self, api_key):
+        """Anthropic API 키 설정"""
+        self.api_key = api_key
+        self.client = Anthropic(api_key=api_key)
+    
+    @staticmethod
+    def get_api_key_from_env():
+        """환경변수에서 Anthropic API 키 가져오기"""
+        return st.secrets.get("ANTHROPIC_API_KEY", "")
+    
+    def analyze_company_value(self, company_info, financial_data, industry_info=None):
+        """Claude를 이용한 기업 가치 분석"""
+        if not self.api_key:
+            return {
+                "status": "error",
+                "message": "Anthropic API 키가 설정되지 않았습니다."
+            }
+        
+        try:
+            # 데이터 준비
+            finances, ratios = self._prepare_financial_data(financial_data)
+            sector_info = self._prepare_industry_info(industry_info)
+            
+            # 프롬프트 생성
+            prompt = self._create_valuation_prompt(company_info, finances, ratios, sector_info)
+            
+            # Claude API 호출
+            response = self.client.messages.create(
+                model="claude-3-opus-20240229",
+                max_tokens=2000,
+                temperature=0.2,
+                messages=[{
+                    "role": "system",
+                    "content": "당신은 기업 가치 평가와 M&A 분석을 전문으로 하는 금융 애널리스트입니다. JSON 형식으로 정확한 값만 출력합니다."
+                }, {
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            
+            # 응답 파싱
+            return self._parse_llm_response(response.content)
+            
+        except Exception as e:
+            logger.error(f"Claude 분석 오류: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"분석 중 오류가 발생했습니다: {str(e)}"
+            }
+    
+    def analyze_investment_potential(self, company_info, financial_data, specific_question):
+        """특정 질문에 대한 투자 잠재력 분석"""
+        if not self.api_key:
+            return {
+                "status": "error",
+                "message": "Anthropic API 키가 설정되지 않았습니다."
+            }
+        
+        try:
+            # 회사 정보 추출
+            company_name = company_info.get('corp_name', '알 수 없음')
+            
+            # 재무 정보 준비
+            finances, _ = self._prepare_financial_data(financial_data)
+            
+            # 프롬프트 구성
+            prompt = f"""
+            다음은 {company_name} 기업의 재무 정보입니다:
+            
+            {json.dumps(finances, ensure_ascii=False, indent=2)}
+            
+            위 정보를 바탕으로 다음 질문에 답변해주세요:
+            
+            {specific_question}
+            
+            객관적인 데이터를 바탕으로 명확하게 답변해주세요.
+            """
+            
+            # Claude API 호출
+            response = self.client.messages.create(
+                model="claude-3-opus-20240229",
+                max_tokens=1000,
+                temperature=0.5,
+                messages=[{
+                    "role": "system",
+                    "content": "당신은 기업 재무 및 투자 분석을 전문으로 하는 애널리스트입니다. 데이터에 기반한 객관적인 답변을 제공합니다."
+                }, {
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            
+            return {
+                "status": "success",
+                "analysis": response.content
+            }
+            
+        except Exception as e:
+            logger.error(f"Claude 분석 오류: {str(e)}")
             return {
                 "status": "error",
                 "message": f"분석 중 오류가 발생했습니다: {str(e)}"
