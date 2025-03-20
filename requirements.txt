@@ -1,5 +1,6 @@
 streamlit
 openai
+anthropic
 pandas
 numpy
 plotly
@@ -8,3 +9,8 @@ python-dotenv
 matplotlib
 langchain
 langchain-community
+langchain-anthropic
+langchain-ollama
+langchain-openai
+langchain-groq
+langchain-grok
