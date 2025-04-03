@@ -654,24 +654,111 @@ class BridgeApp:
             st.markdown(f"## 선택된 기업: {st.session_state.company_info.get('corp_name', '알 수 없음')} ({st.session_state.selected_company.get('stock_code', '')})")
 
             # 탭 생성
-            tabs = st.tabs(["기업 개요", "재무 현황", "재무 비율", "가치 평가", "LLM 분석"])
+            tabs = st.tabs(["기업 개요", "재무", "가치 평가", "LLM 분석"])
             
             # 탭 1: 기업 개요
             with tabs[0]:
                 self.display_company_info(st.session_state.company_info)
                 
-            # 탭 2: 재무 현황
+            # 탭 2: 재무
             with tabs[1]:
-                self.display_financial_statements(st.session_state.selected_company["corp_code"])
+                # 재무 내부 탭 생성
+                finance_tabs = st.tabs(["재무현황", "재무상태표", "손익계산서"])
                 
-            # 탭 3: 재무 비율
+                # 재무현황 탭
+                with finance_tabs[0]:
+                    self.display_financial_ratios(st.session_state.selected_company["corp_code"])
+                
+                # 재무상태표 탭
+                with finance_tabs[1]:
+                    self.display_balance_sheet(st.session_state.selected_company["corp_code"])
+                
+                # 손익계산서 탭
+                with finance_tabs[2]:
+                    self.display_income_statement(st.session_state.selected_company["corp_code"])
+                
+            # 탭 3: 가치 평가
             with tabs[2]:
-                self.display_financial_ratios(st.session_state.selected_company["corp_code"])
-                
-            # 탭 4: 가치 평가
-            with tabs[3]:
                 self.display_valuation(st.session_state.selected_company["corp_code"])
                 
-            # 탭 5: LLM 기업 분석
-            with tabs[4]:
+            # 탭 4: LLM 기업 분석
+            with tabs[3]:
                 self.display_llm_analysis(st.session_state.company_info, st.session_state.selected_company["corp_code"])
+
+    def display_balance_sheet(self, corp_code):
+        """재무상태표 정보 표시
+        
+        Args:
+            corp_code (str): 기업 고유 코드
+        """
+        st.subheader("재무상태표")
+        
+        # 연도 선택기 표시
+        year_changed = self._year_selector("balance_sheet")
+        
+        # 데이터 로드
+        financial_data, success = self._load_financial_data(corp_code)
+        if not success:
+            st.error("조회 가능한 재무 데이터가 없습니다.")
+            return
+            
+        # 자산/부채/자본 그래프
+        balance_df = pd.DataFrame({
+            "연도": [str(y) for y in financial_data["years"]],
+            "자산": financial_data["assets"],
+            "부채": financial_data["liabilities"],
+            "자본": financial_data["equity"]
+        })
+        
+        # 표 형태로 데이터 표시
+        st.dataframe(balance_df, hide_index=True, use_container_width=True)
+        
+        # 그래프 표시
+        fig = px.bar(
+            balance_df, 
+            x="연도", 
+            y=["자산", "부채", "자본"],
+            barmode="group",
+            title="자산/부채/자본 추이",
+            labels={"value": "금액 (백만원)", "variable": "항목"}
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    def display_income_statement(self, corp_code):
+        """손익계산서 정보 표시
+        
+        Args:
+            corp_code (str): 기업 고유 코드
+        """
+        st.subheader("손익계산서")
+        
+        # 연도 선택기 표시
+        year_changed = self._year_selector("income_statement")
+        
+        # 데이터 로드
+        financial_data, success = self._load_financial_data(corp_code)
+        if not success:
+            st.error("조회 가능한 재무 데이터가 없습니다.")
+            return
+        
+        # 매출/이익 그래프
+        income_df = pd.DataFrame({
+            "연도": [str(y) for y in financial_data["years"]],
+            "매출액": financial_data["revenue"],
+            "영업이익": financial_data["operating_profit"],
+            "당기순이익": financial_data["net_income"]
+        })
+        
+        # 표 형태로 데이터 표시
+        st.dataframe(income_df, hide_index=True, use_container_width=True)
+        
+        # 그래프 표시
+        fig = px.line(
+            income_df, 
+            x="연도", 
+            y=["매출액", "영업이익", "당기순이익"],
+            title="매출 및 이익 추이",
+            labels={"value": "금액 (백만원)", "variable": "항목"},
+            markers=True
+        )
+        st.plotly_chart(fig, use_container_width=True)
