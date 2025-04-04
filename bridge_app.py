@@ -721,27 +721,113 @@ class BridgeApp:
             st.error("조회 가능한 재무 데이터가 없습니다.")
             return
             
-        # 자산/부채/자본 그래프
-        balance_df = pd.DataFrame({
-            "연도": [str(y) for y in financial_data["years"]],
-            "자산": financial_data["assets"],
-            "부채": financial_data["liabilities"],
-            "자본": financial_data["equity"]
-        })
+        # 재무상태표 데이터프레임 생성
+        balance_sheet_data = []
+        years = financial_data["years"]
         
-        # 표 형태로 데이터 표시
-        st.dataframe(balance_df, hide_index=True, use_container_width=True)
+        # 자산 섹션
+        balance_sheet_data.extend([
+            {"항목": "자산", "구분": "총계"} | {str(year): value for year, value in zip(years, financial_data["assets"])},
+            {"항목": "유동자산", "구분": "소계"} | {str(year): value for year, value in zip(years, financial_data["current_assets"])},
+            {"항목": "당기자산", "구분": "상세"} | {str(year): value for year, value in zip(years, financial_data["cash_and_equivalents"])},
+            {"항목": "매출채권", "구분": "상세"} | {str(year): value for year, value in zip(years, financial_data["trade_receivables"])},
+            {"항목": "재고자산", "구분": "상세"} | {str(year): value for year, value in zip(years, financial_data["inventories"])},
+            {"항목": "비유동자산", "구분": "소계"} | {str(year): value for year, value in zip(years, financial_data["non_current_assets"])},
+        ])
         
-        # 그래프 표시
-        fig = px.bar(
-            balance_df, 
-            x="연도", 
-            y=["자산", "부채", "자본"],
-            barmode="group",
-            title="자산/부채/자본 추이",
-            labels={"value": "금액 (백만원)", "variable": "항목"}
+        # 부채 섹션
+        balance_sheet_data.extend([
+            {"항목": "부채", "구분": "총계"} | {str(year): value for year, value in zip(years, financial_data["liabilities"])},
+            {"항목": "유동부채", "구분": "소계"} | {str(year): value for year, value in zip(years, financial_data["current_liabilities"])},
+            {"항목": "매입채무", "구분": "상세"} | {str(year): value for year, value in zip(years, financial_data["trade_payables"])},
+            {"항목": "단기차입금", "구분": "상세"} | {str(year): value for year, value in zip(years, financial_data["short_term_borrowings"])},
+            {"항목": "비유동부채", "구분": "소계"} | {str(year): value for year, value in zip(years, financial_data["non_current_liabilities"])},
+        ])
+        
+        # 자본 섹션
+        balance_sheet_data.extend([
+            {"항목": "자본", "구분": "총계"} | {str(year): value for year, value in zip(years, financial_data["equity"])},
+        ])
+        
+        # 데이터프레임 생성
+        df = pd.DataFrame(balance_sheet_data)
+        
+        # 스타일 적용을 위한 함수
+        def highlight_totals(row):
+            if row["구분"] == "총계":
+                return ["font-weight: bold; background-color: #f0f2f6"] * len(row)
+            elif row["구분"] == "소계":
+                return ["font-weight: bold; background-color: #f8f9fa"] * len(row)
+            return [""] * len(row)
+        
+        # 스타일이 적용된 데이터프레임 표시
+        st.dataframe(
+            df.style.apply(highlight_totals, axis=1),
+            hide_index=True,
+            use_container_width=True
         )
-        st.plotly_chart(fig, use_container_width=True)
+        
+        # 주요 비율 계산 및 표시
+        st.subheader("주요 재무비율")
+        
+        ratios_data = []
+        for i, year in enumerate(years):
+            if financial_data["assets"][i] > 0:  # 0으로 나누기 방지
+                current_ratio = (financial_data["current_assets"][i] / financial_data["current_liabilities"][i] * 100) if financial_data["current_liabilities"][i] > 0 else 0
+                debt_ratio = (financial_data["liabilities"][i] / financial_data["assets"][i] * 100)
+                equity_ratio = (financial_data["equity"][i] / financial_data["assets"][i] * 100)
+                
+                ratios_data.append({
+                    "연도": str(year),
+                    "유동비율": f"{current_ratio:.1f}%",
+                    "부채비율": f"{debt_ratio:.1f}%",
+                    "자기자본비율": f"{equity_ratio:.1f}%"
+                })
+        
+        ratios_df = pd.DataFrame(ratios_data)
+        st.dataframe(ratios_df, hide_index=True, use_container_width=True)
+        
+        # 시각화 섹션
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 자산/부채/자본 막대 그래프
+            st.subheader("자산/부채/자본 추이")
+            balance_df = pd.DataFrame({
+                "연도": [str(y) for y in years],
+                "자산": financial_data["assets"],
+                "부채": financial_data["liabilities"],
+                "자본": financial_data["equity"]
+            })
+            
+            fig1 = px.bar(
+                balance_df,
+                x="연도",
+                y=["자산", "부채", "자본"],
+                title="자산/부채/자본 추이",
+                labels={"value": "금액 (백만원)", "variable": "항목"},
+                barmode="group"
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+        
+        with col2:
+            # 자산 구조 시각화
+            st.subheader("자산 구조 추이")
+            asset_structure = pd.DataFrame({
+                "연도": [str(y) for y in years],
+                "유동자산": financial_data["current_assets"],
+                "비유동자산": financial_data["non_current_assets"]
+            })
+            
+            fig2 = px.bar(
+                asset_structure,
+                x="연도",
+                y=["유동자산", "비유동자산"],
+                title="자산 구조 추이",
+                labels={"value": "금액 (백만원)", "variable": "구분"},
+                barmode="stack"
+            )
+            st.plotly_chart(fig2, use_container_width=True)
 
     def display_income_statement(self, corp_code):
         """손익계산서 정보 표시

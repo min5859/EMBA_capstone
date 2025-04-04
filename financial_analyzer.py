@@ -15,40 +15,33 @@ class FinancialAnalyzer:
         Returns:
             dict: 처리된 재무 데이터
         """
-        # 디버깅 정보는 접혀진 expander에 넣기
-        debug_info = {
-            "요청 연도": years,
-            "데이터 목록 길이": len(financial_data_list),
-            "연도별 데이터": [],
-            "계정과목 정보": {},
-            "처리 결과": {}
-        }
-
-        # 각 데이터셋의 기본 정보 확인
-        for i, data in enumerate(financial_data_list):
-            year_info = {
-                "연도": years[i],
-                "상태": "None" if data is None else 
-                       f"API 오류 - {data.get('message', '알 수 없는 오류')}" if 'status' in data and data['status'] != '000' else
-                       "'list' 키 없음" if 'list' not in data else
-                       f"{len(data['list'])}개 항목"
-            }
-            debug_info["연도별 데이터"].append(year_info)
-
-            if data and 'list' in data and len(data['list']) > 0:
-                # 첫 5개 항목 샘플 저장
-                sample_data = pd.DataFrame(data['list'][:5])[['account_nm', 'account_id', 'thstrm_amount']]
-                year_info["샘플 데이터"] = sample_data.to_dict('records')
-
         # 관심 있는 계정과목
         accounts = {
+            # 자산 계정
             "자산": ["ifrs-full_Assets", "ifrs_Assets", "Assets", 
                      "ifrs-full_TotalAssets", "ifrs_TotalAssets", "TotalAssets"],
+            "유동자산": ["ifrs-full_CurrentAssets", "ifrs_CurrentAssets", "CurrentAssets"],
+            "당기자산": ["ifrs-full_CashAndCashEquivalents", "ifrs_CashAndCashEquivalents", "CashAndCashEquivalents"],
+            "매출채권": ["ifrs-full_TradeAndOtherCurrentReceivables", "ifrs_TradeAndOtherCurrentReceivables",
+                      "TradeAndOtherCurrentReceivables", "ifrs-full_TradeReceivables", "ifrs_TradeReceivables"],
+            "재고자산": ["ifrs-full_Inventories", "ifrs_Inventories", "Inventories"],
+            "비유동자산": ["ifrs-full_NoncurrentAssets", "ifrs_NoncurrentAssets", "NoncurrentAssets"],
+            
+            # 부채 계정
             "부채": ["ifrs-full_Liabilities", "ifrs_Liabilities", "Liabilities", 
                      "ifrs-full_TotalLiabilities", "ifrs_TotalLiabilities", "TotalLiabilities"],
+            "유동부채": ["ifrs-full_CurrentLiabilities", "ifrs_CurrentLiabilities", "CurrentLiabilities"],
+            "매입채무": ["ifrs-full_TradeAndOtherCurrentPayables", "ifrs_TradeAndOtherCurrentPayables",
+                      "TradeAndOtherCurrentPayables", "ifrs-full_TradePayables", "ifrs_TradePayables"],
+            "단기차입금": ["ifrs-full_ShorttermBorrowings", "ifrs_ShorttermBorrowings", "ShorttermBorrowings"],
+            "비유동부채": ["ifrs-full_NoncurrentLiabilities", "ifrs_NoncurrentLiabilities", "NoncurrentLiabilities"],
+            
+            # 자본 계정
             "자본": ["ifrs-full_Equity", "ifrs_Equity", "Equity", 
                      "EquityAttributableToOwnersOfParent", "ifrs-full_EquityAttributableToOwnersOfParent",
                      "ifrs-full_TotalEquity", "ifrs_TotalEquity", "TotalEquity"],
+            
+            # 손익계산서 계정
             "매출액": ["ifrs-full_Revenue", "ifrs_Revenue", "Revenue", 
                       "ifrs-full_OperatingRevenue", "ifrs_OperatingRevenue", "OperatingRevenue", 
                       "ifrs-full_GrossOperatingProfit", "ifrs_GrossOperatingProfit", "GrossOperatingProfit",
@@ -63,9 +56,25 @@ class FinancialAnalyzer:
 
         # 결과 데이터 초기화
         result = {
+            # 자산 항목
             "assets": [],
+            "current_assets": [],
+            "cash_and_equivalents": [],
+            "trade_receivables": [],
+            "inventories": [],
+            "non_current_assets": [],
+            
+            # 부채 항목
             "liabilities": [],
+            "current_liabilities": [],
+            "trade_payables": [],
+            "short_term_borrowings": [],
+            "non_current_liabilities": [],
+            
+            # 자본 항목
             "equity": [],
+            
+            # 손익계산서 항목
             "revenue": [],
             "operating_profit": [],
             "net_income": [],
@@ -74,43 +83,38 @@ class FinancialAnalyzer:
 
         # 연도별 데이터 처리
         for idx, year_data in enumerate(financial_data_list):
-            year_debug_info = {
-                "연도": years[idx],
-                "발견된 계정과목": {},
-                "처리 결과": {}
-            }
-
             year_result = {
+                # 자산 항목
                 "assets": 0,
+                "current_assets": 0,
+                "cash_and_equivalents": 0,
+                "trade_receivables": 0,
+                "inventories": 0,
+                "non_current_assets": 0,
+                
+                # 부채 항목
                 "liabilities": 0,
+                "current_liabilities": 0,
+                "trade_payables": 0,
+                "short_term_borrowings": 0,
+                "non_current_liabilities": 0,
+                
+                # 자본 항목
                 "equity": 0,
+                
+                # 손익계산서 항목
                 "revenue": 0,
                 "operating_profit": 0,
                 "net_income": 0
             }
 
             if year_data is None or 'list' not in year_data:
-                year_debug_info["상태"] = "데이터 없음"
                 for key in year_result.keys():
                     result[key].append(0)
-                debug_info["연도별 데이터"][idx].update(year_debug_info)
                 continue
-            
-            # 각 계정 찾기
+
             fin_data = year_data['list']
-
-            # 계정과목 목록 확인
-            unique_accounts = {}
-            for item in fin_data:
-                if 'account_id' in item and 'account_nm' in item:
-                    unique_accounts[item['account_id']] = item['account_nm']
-
-            year_debug_info["발견된 계정과목 수"] = len(unique_accounts)
-            year_debug_info["계정과목 목록"] = unique_accounts
-
-            # 주요 계정과목 찾기
-            found_accounts = {key: False for key in accounts.keys()}
-
+            
             # 각 계정별로 값 찾기
             for fin_item in fin_data:
                 account_id = fin_item.get('account_id')
@@ -118,126 +122,64 @@ class FinancialAnalyzer:
                     for key, id_list in accounts.items():
                         if account_id in id_list:
                             sj_div = fin_item.get('sj_div', '')
-
-                            # 대차대조표 항목 (자산, 부채, 자본)
-                            if key in ["자산", "부채", "자본"] and sj_div == 'BS':
+                            
+                            # 재무상태표 항목
+                            if sj_div == 'BS':
                                 try:
                                     value = int(fin_item.get('thstrm_amount', '0').replace(',', ''))
+                                    value_in_millions = value // 1000000  # 백만원 단위로 변환
+                                    
+                                    # 자산 항목
                                     if key == "자산" and year_result["assets"] == 0:
-                                        year_result["assets"] = value // 1000000  # 백만원 단위로 변환
-                                        found_accounts[key] = True
-                                        year_debug_info["발견된 계정과목"][key] = {
-                                            "계정명": fin_item.get('account_nm'),
-                                            "계정ID": account_id,
-                                            "값": f"{value // 1000000}백만원"
-                                        }
+                                        year_result["assets"] = value_in_millions
+                                    elif key == "유동자산" and year_result["current_assets"] == 0:
+                                        year_result["current_assets"] = value_in_millions
+                                    elif key == "당기자산" and year_result["cash_and_equivalents"] == 0:
+                                        year_result["cash_and_equivalents"] = value_in_millions
+                                    elif key == "매출채권" and year_result["trade_receivables"] == 0:
+                                        year_result["trade_receivables"] = value_in_millions
+                                    elif key == "재고자산" and year_result["inventories"] == 0:
+                                        year_result["inventories"] = value_in_millions
+                                    elif key == "비유동자산" and year_result["non_current_assets"] == 0:
+                                        year_result["non_current_assets"] = value_in_millions
+                                    
+                                    # 부채 항목
                                     elif key == "부채" and year_result["liabilities"] == 0:
-                                        year_result["liabilities"] = value // 1000000
-                                        found_accounts[key] = True
-                                        year_debug_info["발견된 계정과목"][key] = {
-                                            "계정명": fin_item.get('account_nm'),
-                                            "계정ID": account_id,
-                                            "값": f"{value // 1000000}백만원"
-                                        }
+                                        year_result["liabilities"] = value_in_millions
+                                    elif key == "유동부채" and year_result["current_liabilities"] == 0:
+                                        year_result["current_liabilities"] = value_in_millions
+                                    elif key == "매입채무" and year_result["trade_payables"] == 0:
+                                        year_result["trade_payables"] = value_in_millions
+                                    elif key == "단기차입금" and year_result["short_term_borrowings"] == 0:
+                                        year_result["short_term_borrowings"] = value_in_millions
+                                    elif key == "비유동부채" and year_result["non_current_liabilities"] == 0:
+                                        year_result["non_current_liabilities"] = value_in_millions
+                                    
+                                    # 자본 항목
                                     elif key == "자본" and year_result["equity"] == 0:
-                                        year_result["equity"] = value // 1000000
-                                        found_accounts[key] = True
-                                        year_debug_info["발견된 계정과목"][key] = {
-                                            "계정명": fin_item.get('account_nm'),
-                                            "계정ID": account_id,
-                                            "값": f"{value // 1000000}백만원"
-                                        }
-                                except (ValueError, TypeError) as e:
-                                    year_debug_info["처리 오류"] = year_debug_info.get("처리 오류", [])
-                                    year_debug_info["처리 오류"].append(f"{key} 처리 오류: {e}")
-
-                            # 손익계산서 항목 (매출액, 영업이익, 당기순이익)
-                            elif key in ["매출액", "영업이익", "당기순이익"] and (sj_div == 'CIS' or sj_div == 'IS'):
+                                        year_result["equity"] = value_in_millions
+                                        
+                                except (ValueError, TypeError):
+                                    pass
+                            
+                            # 손익계산서 항목
+                            elif sj_div == 'CIS' or sj_div == 'IS':
                                 try:
                                     value = int(fin_item.get('thstrm_amount', '0').replace(',', ''))
+                                    value_in_millions = value // 1000000
+                                    
                                     if key == "매출액" and year_result["revenue"] == 0:
-                                        year_result["revenue"] = value // 1000000
-                                        found_accounts[key] = True
-                                        year_debug_info["발견된 계정과목"][key] = {
-                                            "계정명": fin_item.get('account_nm'),
-                                            "계정ID": account_id,
-                                            "값": f"{value // 1000000}백만원"
-                                        }
+                                        year_result["revenue"] = value_in_millions
                                     elif key == "영업이익" and year_result["operating_profit"] == 0:
-                                        year_result["operating_profit"] = value // 1000000
-                                        found_accounts[key] = True
-                                        year_debug_info["발견된 계정과목"][key] = {
-                                            "계정명": fin_item.get('account_nm'),
-                                            "계정ID": account_id,
-                                            "값": f"{value // 1000000}백만원"
-                                        }
+                                        year_result["operating_profit"] = value_in_millions
                                     elif key == "당기순이익" and year_result["net_income"] == 0:
-                                        year_result["net_income"] = value // 1000000
-                                        found_accounts[key] = True
-                                        year_debug_info["발견된 계정과목"][key] = {
-                                            "계정명": fin_item.get('account_nm'),
-                                            "계정ID": account_id,
-                                            "값": f"{value // 1000000}백만원"
-                                        }
-                                except (ValueError, TypeError) as e:
-                                    year_debug_info["처리 오류"] = year_debug_info.get("처리 오류", [])
-                                    year_debug_info["처리 오류"].append(f"{key} 처리 오류: {e}")
-
-            # 찾지 못한 계정과목 표시
-            for key, found in found_accounts.items():
-                if not found:
-                    year_debug_info["찾지 못한 계정과목"] = year_debug_info.get("찾지 못한 계정과목", [])
-                    year_debug_info["찾지 못한 계정과목"].append(key)
-                    
-                    # 유사한 계정과목 찾기
-                    similar_accounts = []
-                    for act_id, act_nm in unique_accounts.items():
-                        # 계정ID가 키워드를 포함하는지 또는 계정명이 키워드를 포함하는지 확인
-                        match_id = any(pattern.lower() in act_id.lower() for pattern in accounts[key])
-                        match_name = any(key_term in act_nm for key_term in [key, "이익", "자산", "부채", "자본", "매출"])
-                        
-                        if match_id or match_name:
-                            similar_accounts.append(f"{act_id} ({act_nm})")
-                    
-                    if similar_accounts:
-                        year_debug_info["유사 계정과목"] = year_debug_info.get("유사 계정과목", {})
-                        year_debug_info["유사 계정과목"][key] = similar_accounts[:5]
+                                        year_result["net_income"] = value_in_millions
+                                except (ValueError, TypeError):
+                                    pass
 
             # 연도별 결과 추가
             for key, value in year_result.items():
                 result[key].append(value)
-
-            year_debug_info["처리 결과"] = year_result
-            debug_info["연도별 데이터"][idx].update(year_debug_info)
-
-        # 처리 결과 요약
-        result_df = pd.DataFrame({
-            "연도": years,
-            "자산": result["assets"],
-            "부채": result["liabilities"],
-            "자본": result["equity"],
-            "매출액": result["revenue"],
-            "영업이익": result["operating_profit"],
-            "당기순이익": result["net_income"]
-        })
-        debug_info["처리 결과"]["요약"] = result_df.to_dict('records')
-
-        # 유효 데이터 확인
-        valid_data_count = sum(1 for i in range(len(years)) 
-                            if result["revenue"][i] > 0 or result["operating_profit"][i] > 0)
-        debug_info["처리 결과"]["유효 데이터 수"] = valid_data_count
-
-        # 모든 계정과목 ID 목록
-        all_accounts = {}
-        for data in financial_data_list:
-            if data and 'list' in data:
-                for item in data['list']:
-                    if 'account_id' in item and 'account_nm' in item:
-                        all_accounts[item['account_id']] = item['account_nm']
-        debug_info["처리 결과"]["전체 계정과목"] = all_accounts
-
-        # 디버깅 정보를 결과에 포함
-        result["debug_info"] = debug_info
 
         return result
     
