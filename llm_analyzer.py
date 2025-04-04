@@ -307,34 +307,23 @@ class Gemma3Analyzer(BaseAnalyzer):
             }
 
 class ClaudeAnalyzer(BaseAnalyzer):
-    """Claude를 이용한 기업 가치 분석을 위한 클래스"""
+    """Claude를 이용한 기업 분석기"""
     
     def __init__(self):
-        """Claude 분석기 클래스 초기화"""
-        self.api_key = st.secrets.get("ANTHROPIC_API_KEY")
-        if not self.api_key:
-            logger.warning("ANTHROPIC_API_KEY가 설정되지 않았습니다. 환경변수 또는 직접 입력이 필요합니다.")
-        else:
-            self.client = Anthropic(api_key=self.api_key)
-    
-    def set_api_key(self, api_key):
-        """Anthropic API 키 설정"""
-        self.api_key = api_key
-        self.client = Anthropic(api_key=api_key)
-    
-    @staticmethod
-    def get_api_key_from_env():
-        """환경변수에서 Anthropic API 키 가져오기"""
-        return st.secrets.get("ANTHROPIC_API_KEY", "")
-    
-    def analyze_company_value(self, company_info, financial_data, industry_info=None):
-        """Claude를 이용한 기업 가치 분석"""
-        if not self.api_key:
-            return {
-                "status": "error",
-                "message": "Anthropic API 키가 설정되지 않았습니다."
-            }
+        """Claude 분석기 초기화"""
+        self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         
+    def analyze_company_value(self, company_info, financial_data, industry_info):
+        """기업 가치 분석
+        
+        Args:
+            company_info (dict): 기업 정보
+            financial_data (dict): 재무 데이터
+            industry_info (dict): 산업 정보
+            
+        Returns:
+            dict: 분석 결과
+        """
         try:
             # 데이터 준비
             finances, ratios = self._prepare_financial_data(financial_data)
@@ -345,39 +334,44 @@ class ClaudeAnalyzer(BaseAnalyzer):
             
             # Claude API 호출
             response = self.client.messages.create(
-                model="claude-3-opus-20240229",
-                max_tokens=2000,
-                temperature=0.2,
+                model="claude-3-sonnet-20240229",
+                max_tokens=4096,
+                system="당신은 기업 가치 평가 전문가입니다. 주어진 기업의 재무 데이터와 산업 정보를 바탕으로 기업의 가치를 분석하고 평가해주세요.",
                 messages=[{
-                    "role": "system",
-                    "content": "당신은 기업 가치 평가와 M&A 분석을 전문으로 하는 금융 애널리스트입니다. JSON 형식으로 정확한 값만 출력합니다."
-                }, {
                     "role": "user",
                     "content": prompt
                 }]
             )
             
-            # 응답 파싱
-            return self._parse_llm_response(response.content)
+            # 응답 파싱 및 결과 반환
+            analysis_result = self._parse_llm_response(response.content[0].text)
+            
+            return {
+                "status": "success",
+                "analysis": analysis_result["valuation_data"],
+                "valuation_data": analysis_result["valuation_data"]
+            }
             
         except Exception as e:
-            logger.error(f"Claude 분석 오류: {str(e)}")
             return {
                 "status": "error",
                 "message": f"분석 중 오류가 발생했습니다: {str(e)}"
             }
     
-    def analyze_investment_potential(self, company_info, financial_data, specific_question):
-        """특정 질문에 대한 투자 잠재력 분석"""
-        if not self.api_key:
-            return {
-                "status": "error",
-                "message": "Anthropic API 키가 설정되지 않았습니다."
-            }
+    def analyze_investment_potential(self, company_info, financial_data, question):
+        """투자 잠재력 분석
         
+        Args:
+            company_info (dict): 기업 정보
+            financial_data (dict): 재무 데이터
+            question (str): 분석 질문
+            
+        Returns:
+            dict: 분석 결과
+        """
         try:
             # 회사 정보 추출
-            company_name = company_info.get('corp_name', '알 수 없음')
+            company_name = company_info.get('기본정보', {}).get('기업명', '알 수 없음')
             
             # 재무 정보 준비
             finances, _ = self._prepare_financial_data(financial_data)
@@ -390,20 +384,17 @@ class ClaudeAnalyzer(BaseAnalyzer):
             
             위 정보를 바탕으로 다음 질문에 답변해주세요:
             
-            {specific_question}
+            {question}
             
             객관적인 데이터를 바탕으로 명확하게 답변해주세요.
             """
             
             # Claude API 호출
             response = self.client.messages.create(
-                model="claude-3-opus-20240229",
-                max_tokens=1000,
-                temperature=0.5,
+                model="claude-3-sonnet-20240229",
+                max_tokens=4096,
+                system="당신은 기업 분석 전문가입니다. 주어진 기업의 재무 데이터를 바탕으로 투자자의 질문에 답변해주세요.",
                 messages=[{
-                    "role": "system",
-                    "content": "당신은 기업 재무 및 투자 분석을 전문으로 하는 애널리스트입니다. 데이터에 기반한 객관적인 답변을 제공합니다."
-                }, {
                     "role": "user",
                     "content": prompt
                 }]
@@ -411,11 +402,10 @@ class ClaudeAnalyzer(BaseAnalyzer):
             
             return {
                 "status": "success",
-                "analysis": response.content
+                "analysis": response.content[0].text
             }
             
         except Exception as e:
-            logger.error(f"Claude 분석 오류: {str(e)}")
             return {
                 "status": "error",
                 "message": f"분석 중 오류가 발생했습니다: {str(e)}"
