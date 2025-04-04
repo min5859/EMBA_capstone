@@ -365,6 +365,25 @@ class BridgeApp:
         st.dataframe(ratio_df, hide_index=True, use_container_width=True)
         
         # 주요 비율 그래프로 표시
+
+        # 0. 영업이익과 순이익의 실제 값 (막대 그래프)
+        profit_values = pd.DataFrame({
+            "연도": financial_data["years"],
+            "영업이익": financial_data["operating_profit"],
+            "순이익": financial_data["net_income"]
+        })
+        
+        fig4 = px.bar(
+            profit_values,
+            x="연도",
+            y=["영업이익", "순이익"],
+            barmode="group",
+            title="영업이익 및 순이익 추이",
+            labels={"value": "금액 (백만원)", "variable": "항목"}
+        )
+        st.plotly_chart(fig4, use_container_width=True)
+
+
         # 1. 수익성 비율 (영업이익률, 순이익률)
         profit_ratios = pd.DataFrame({
             "연도": ratio_df["연도"],
