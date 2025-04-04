@@ -16,26 +16,29 @@ class FinancialAnalyzer:
             dict: 처리된 재무 데이터
         """
         # 디버깅 정보는 접혀진 expander에 넣기
-        with st.expander("디버깅 정보 (클릭하여 펼치기)", expanded=False):
-            st.write(f"요청 연도: {years}")
-            st.write(f"데이터 목록 길이: {len(financial_data_list)}")
+        debug_info = {
+            "요청 연도": years,
+            "데이터 목록 길이": len(financial_data_list),
+            "연도별 데이터": [],
+            "계정과목 정보": {},
+            "처리 결과": {}
+        }
 
-            # 각 데이터셋의 기본 정보 확인
-            for i, data in enumerate(financial_data_list):
-                if data is None:
-                    st.write(f"{years[i]}년 데이터: None")
-                elif 'status' in data and data['status'] != '000':
-                    st.write(f"{years[i]}년 데이터: API 오류 - {data.get('message', '알 수 없는 오류')}")
-                elif 'list' not in data:
-                    st.write(f"{years[i]}년 데이터: 'list' 키 없음")
-                else:
-                    st.write(f"{years[i]}년 데이터: {len(data['list'])}개 항목")
+        # 각 데이터셋의 기본 정보 확인
+        for i, data in enumerate(financial_data_list):
+            year_info = {
+                "연도": years[i],
+                "상태": "None" if data is None else 
+                       f"API 오류 - {data.get('message', '알 수 없는 오류')}" if 'status' in data and data['status'] != '000' else
+                       "'list' 키 없음" if 'list' not in data else
+                       f"{len(data['list'])}개 항목"
+            }
+            debug_info["연도별 데이터"].append(year_info)
 
-                    # 첫 5개 항목 샘플 출력
-                    if len(data['list']) > 0:
-                        st.write(f"{years[i]}년 데이터 샘플:")
-                        sample_data = pd.DataFrame(data['list'][:5])[['account_nm', 'account_id', 'thstrm_amount']]
-                        st.dataframe(sample_data)
+            if data and 'list' in data and len(data['list']) > 0:
+                # 첫 5개 항목 샘플 저장
+                sample_data = pd.DataFrame(data['list'][:5])[['account_nm', 'account_id', 'thstrm_amount']]
+                year_info["샘플 데이터"] = sample_data.to_dict('records')
 
         # 관심 있는 계정과목
         accounts = {
@@ -71,7 +74,11 @@ class FinancialAnalyzer:
 
         # 연도별 데이터 처리
         for idx, year_data in enumerate(financial_data_list):
-            st.write(f"### {years[idx]}년 데이터 처리")
+            year_debug_info = {
+                "연도": years[idx],
+                "발견된 계정과목": {},
+                "처리 결과": {}
+            }
 
             year_result = {
                 "assets": 0,
@@ -83,9 +90,10 @@ class FinancialAnalyzer:
             }
 
             if year_data is None or 'list' not in year_data:
-                st.write(f"{years[idx]}년: 데이터 없음")
+                year_debug_info["상태"] = "데이터 없음"
                 for key in year_result.keys():
                     result[key].append(0)
+                debug_info["연도별 데이터"][idx].update(year_debug_info)
                 continue
             
             # 각 계정 찾기
@@ -97,7 +105,8 @@ class FinancialAnalyzer:
                 if 'account_id' in item and 'account_nm' in item:
                     unique_accounts[item['account_id']] = item['account_nm']
 
-            st.write(f"발견된 계정과목 수: {len(unique_accounts)}")
+            year_debug_info["발견된 계정과목 수"] = len(unique_accounts)
+            year_debug_info["계정과목 목록"] = unique_accounts
 
             # 주요 계정과목 찾기
             found_accounts = {key: False for key in accounts.keys()}
@@ -117,17 +126,30 @@ class FinancialAnalyzer:
                                     if key == "자산" and year_result["assets"] == 0:
                                         year_result["assets"] = value // 1000000  # 백만원 단위로 변환
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
+                                        year_debug_info["발견된 계정과목"][key] = {
+                                            "계정명": fin_item.get('account_nm'),
+                                            "계정ID": account_id,
+                                            "값": f"{value // 1000000}백만원"
+                                        }
                                     elif key == "부채" and year_result["liabilities"] == 0:
                                         year_result["liabilities"] = value // 1000000
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
+                                        year_debug_info["발견된 계정과목"][key] = {
+                                            "계정명": fin_item.get('account_nm'),
+                                            "계정ID": account_id,
+                                            "값": f"{value // 1000000}백만원"
+                                        }
                                     elif key == "자본" and year_result["equity"] == 0:
                                         year_result["equity"] = value // 1000000
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
+                                        year_debug_info["발견된 계정과목"][key] = {
+                                            "계정명": fin_item.get('account_nm'),
+                                            "계정ID": account_id,
+                                            "값": f"{value // 1000000}백만원"
+                                        }
                                 except (ValueError, TypeError) as e:
-                                    st.write(f"❌ {key} 처리 오류: {e}")
+                                    year_debug_info["처리 오류"] = year_debug_info.get("처리 오류", [])
+                                    year_debug_info["처리 오류"].append(f"{key} 처리 오류: {e}")
 
                             # 손익계산서 항목 (매출액, 영업이익, 당기순이익)
                             elif key in ["매출액", "영업이익", "당기순이익"] and (sj_div == 'CIS' or sj_div == 'IS'):
@@ -136,24 +158,37 @@ class FinancialAnalyzer:
                                     if key == "매출액" and year_result["revenue"] == 0:
                                         year_result["revenue"] = value // 1000000
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
+                                        year_debug_info["발견된 계정과목"][key] = {
+                                            "계정명": fin_item.get('account_nm'),
+                                            "계정ID": account_id,
+                                            "값": f"{value // 1000000}백만원"
+                                        }
                                     elif key == "영업이익" and year_result["operating_profit"] == 0:
                                         year_result["operating_profit"] = value // 1000000
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
+                                        year_debug_info["발견된 계정과목"][key] = {
+                                            "계정명": fin_item.get('account_nm'),
+                                            "계정ID": account_id,
+                                            "값": f"{value // 1000000}백만원"
+                                        }
                                     elif key == "당기순이익" and year_result["net_income"] == 0:
                                         year_result["net_income"] = value // 1000000
                                         found_accounts[key] = True
-                                        st.write(f"✅ {key} 찾음: {fin_item.get('account_nm')} ({account_id}) = {value // 1000000}백만원")
+                                        year_debug_info["발견된 계정과목"][key] = {
+                                            "계정명": fin_item.get('account_nm'),
+                                            "계정ID": account_id,
+                                            "값": f"{value // 1000000}백만원"
+                                        }
                                 except (ValueError, TypeError) as e:
-                                    st.write(f"❌ {key} 처리 오류: {e}")
+                                    year_debug_info["처리 오류"] = year_debug_info.get("처리 오류", [])
+                                    year_debug_info["처리 오류"].append(f"{key} 처리 오류: {e}")
 
             # 찾지 못한 계정과목 표시
             for key, found in found_accounts.items():
                 if not found:
-                    st.write(f"❌ {key} 찾지 못함")
-                    # 찾고자 하는 계정과목 ID 표시
-                    st.write(f"    찾을 ID: {accounts[key]}")
+                    year_debug_info["찾지 못한 계정과목"] = year_debug_info.get("찾지 못한 계정과목", [])
+                    year_debug_info["찾지 못한 계정과목"].append(key)
+                    
                     # 유사한 계정과목 찾기
                     similar_accounts = []
                     for act_id, act_nm in unique_accounts.items():
@@ -165,49 +200,44 @@ class FinancialAnalyzer:
                             similar_accounts.append(f"{act_id} ({act_nm})")
                     
                     if similar_accounts:
-                        st.write(f"    유사 계정과목: {', '.join(similar_accounts[:5])}")
+                        year_debug_info["유사 계정과목"] = year_debug_info.get("유사 계정과목", {})
+                        year_debug_info["유사 계정과목"][key] = similar_accounts[:5]
 
             # 연도별 결과 추가
             for key, value in year_result.items():
                 result[key].append(value)
 
-        # 처리 결과 요약 (디버깅 정보 expander에 포함)
-        with st.expander("처리 결과 요약", expanded=False):
-            result_df = pd.DataFrame({
-                "연도": years,
-                "자산": result["assets"],
-                "부채": result["liabilities"],
-                "자본": result["equity"],
-                "매출액": result["revenue"],
-                "영업이익": result["operating_profit"],
-                "당기순이익": result["net_income"]
-            })
-            st.dataframe(result_df)
+            year_debug_info["처리 결과"] = year_result
+            debug_info["연도별 데이터"][idx].update(year_debug_info)
 
-            # 유효 데이터 확인
-            valid_data_count = sum(1 for i in range(len(years)) 
-                                if result["revenue"][i] > 0 or result["operating_profit"][i] > 0)
+        # 처리 결과 요약
+        result_df = pd.DataFrame({
+            "연도": years,
+            "자산": result["assets"],
+            "부채": result["liabilities"],
+            "자본": result["equity"],
+            "매출액": result["revenue"],
+            "영업이익": result["operating_profit"],
+            "당기순이익": result["net_income"]
+        })
+        debug_info["처리 결과"]["요약"] = result_df.to_dict('records')
 
-            if valid_data_count > 0:
-                st.write(f"유효한 재무 데이터가 있는 연도 수: {valid_data_count}")
-            else:
-                st.warning("유효한 재무 데이터가 없습니다!")
+        # 유효 데이터 확인
+        valid_data_count = sum(1 for i in range(len(years)) 
+                            if result["revenue"][i] > 0 or result["operating_profit"][i] > 0)
+        debug_info["처리 결과"]["유효 데이터 수"] = valid_data_count
 
-            # 계정과목 ID를 좀 더 확인하기 위한 정보
-            st.write("### 모든 계정과목 목록")
-            all_accounts = {}
-            for data in financial_data_list:
-                if data and 'list' in data:
-                    for item in data['list']:
-                        if 'account_id' in item and 'account_nm' in item:
-                            all_accounts[item['account_id']] = item['account_nm']
+        # 모든 계정과목 ID 목록
+        all_accounts = {}
+        for data in financial_data_list:
+            if data and 'list' in data:
+                for item in data['list']:
+                    if 'account_id' in item and 'account_nm' in item:
+                        all_accounts[item['account_id']] = item['account_nm']
+        debug_info["처리 결과"]["전체 계정과목"] = all_accounts
 
-            if all_accounts:
-                st.write(f"총 계정과목 수: {len(all_accounts)}")
-                account_df = pd.DataFrame([
-                    {"계정ID": k, "계정명": v} for k, v in all_accounts.items()
-                ])
-                st.dataframe(account_df)
+        # 디버깅 정보를 결과에 포함
+        result["debug_info"] = debug_info
 
         return result
     
