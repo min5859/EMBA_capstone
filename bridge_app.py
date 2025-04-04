@@ -359,7 +359,17 @@ class BridgeApp:
         
         # 재무 비율 계산 및 표시
         ratios = self.financial_analyzer.calculate_financial_ratios(financial_data)
-        ratio_df = pd.DataFrame(ratios)
+        
+        # 데이터프레임 피봇을 위한 데이터 준비
+        ratio_data = []
+        for ratio_type in ["매출 성장률", "영업이익률", "순이익률", "ROE", "부채비율"]:
+            ratio_data.append({
+                "항목": ratio_type,
+                **{year: value for year, value in zip(ratios["연도"], ratios[ratio_type])}
+            })
+        
+        # 피봇된 데이터프레임 생성
+        ratio_df = pd.DataFrame(ratio_data)
         
         # 표 형태로 데이터 표시
         st.dataframe(ratio_df, hide_index=True, use_container_width=True)
@@ -383,12 +393,11 @@ class BridgeApp:
         )
         st.plotly_chart(fig4, use_container_width=True)
 
-
         # 1. 수익성 비율 (영업이익률, 순이익률)
         profit_ratios = pd.DataFrame({
-            "연도": ratio_df["연도"],
-            "영업이익률": [float(r.strip('%')) if r != '-' else 0 for r in ratio_df["영업이익률"]],
-            "순이익률": [float(r.strip('%')) if r != '-' else 0 for r in ratio_df["순이익률"]]
+            "연도": ratios["연도"],
+            "영업이익률": [float(r.strip('%')) if r != '-' else 0 for r in ratios["영업이익률"]],
+            "순이익률": [float(r.strip('%')) if r != '-' else 0 for r in ratios["순이익률"]]
         })
         
         fig1 = px.line(
@@ -403,8 +412,8 @@ class BridgeApp:
         
         # 2. 성장성 비율 (매출 성장률)
         growth_ratios = pd.DataFrame({
-            "연도": ratio_df["연도"],
-            "매출 성장률": [float(r.strip('%')) if r != '-' else 0 for r in ratio_df["매출 성장률"]]
+            "연도": ratios["연도"],
+            "매출 성장률": [float(r.strip('%')) if r != '-' else 0 for r in ratios["매출 성장률"]]
         })
         
         fig2 = px.bar(
@@ -420,9 +429,9 @@ class BridgeApp:
         
         # 3. 안정성 및 효율성 비율 (부채비율, ROE)
         stability_ratios = pd.DataFrame({
-            "연도": ratio_df["연도"],
-            "부채비율": [float(r.strip('%')) if r != '-' else 0 for r in ratio_df["부채비율"]],
-            "ROE": [float(r.strip('%')) if r != '-' else 0 for r in ratio_df["ROE"]]
+            "연도": ratios["연도"],
+            "부채비율": [float(r.strip('%')) if r != '-' else 0 for r in ratios["부채비율"]],
+            "ROE": [float(r.strip('%')) if r != '-' else 0 for r in ratios["ROE"]]
         })
         
         fig3 = px.bar(
@@ -846,20 +855,32 @@ class BridgeApp:
             st.error("조회 가능한 재무 데이터가 없습니다.")
             return
         
-        # 매출/이익 그래프
-        income_df = pd.DataFrame({
-            "연도": [str(y) for y in financial_data["years"]],
-            "매출액": financial_data["revenue"],
-            "영업이익": financial_data["operating_profit"],
-            "당기순이익": financial_data["net_income"]
-        })
+        # 손익계산서 데이터프레임 생성
+        income_data = []
+        for item in ["매출액", "영업이익", "당기순이익"]:
+            income_data.append({
+                "항목": item,
+                **{str(year): value for year, value in zip(financial_data["years"], financial_data[{
+                    "매출액": "revenue",
+                    "영업이익": "operating_profit",
+                    "당기순이익": "net_income"
+                }[item]])}
+            })
+        
+        # 피봇된 데이터프레임 생성
+        df = pd.DataFrame(income_data)
         
         # 표 형태로 데이터 표시
-        st.dataframe(income_df, hide_index=True, use_container_width=True)
+        st.dataframe(df, hide_index=True, use_container_width=True)
         
         # 그래프 표시
         fig = px.line(
-            income_df, 
+            pd.DataFrame({
+                "연도": [str(y) for y in financial_data["years"]],
+                "매출액": financial_data["revenue"],
+                "영업이익": financial_data["operating_profit"],
+                "당기순이익": financial_data["net_income"]
+            }),
             x="연도", 
             y=["매출액", "영업이익", "당기순이익"],
             title="매출 및 이익 추이",
