@@ -304,7 +304,7 @@ class BridgeApp:
         })
         
         # 표 형태로 데이터 표시
-        st.dataframe(balance_df, hide_index=True, use_container_width=True)
+        st.dataframe(balance_df, hide_index=True, use_container_width=True, key="statements_balance_table")
         
         # 그래프 표시
         fig1 = px.bar(
@@ -315,7 +315,7 @@ class BridgeApp:
             title="자산/부채/자본 추이",
             labels={"value": "금액 (백만원)", "variable": "항목"}
         )
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, use_container_width=True, key="statements_balance_chart")
         
         # 매출/이익 그래프
         st.subheader("손익계산서")
@@ -327,7 +327,7 @@ class BridgeApp:
         })
         
         # 표 형태로 데이터 표시
-        st.dataframe(income_df, hide_index=True, use_container_width=True)
+        st.dataframe(income_df, hide_index=True, use_container_width=True, key="statements_income_table")
         
         # 그래프 표시
         fig2 = px.line(
@@ -338,7 +338,7 @@ class BridgeApp:
             labels={"value": "금액 (백만원)", "variable": "항목"},
             markers=True
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True, key="statements_income_chart")
     
     def display_financial_ratios(self, corp_code):
         """재무 비율 정보 표시
@@ -372,7 +372,7 @@ class BridgeApp:
         ratio_df = pd.DataFrame(ratio_data)
         
         # 표 형태로 데이터 표시
-        st.dataframe(ratio_df, hide_index=True, use_container_width=True)
+        st.dataframe(ratio_df, hide_index=True, use_container_width=True, key="ratios_summary_table")
         
         # 주요 비율 그래프로 표시
 
@@ -391,7 +391,7 @@ class BridgeApp:
             title="영업이익 및 순이익 추이",
             labels={"value": "금액 (백만원)", "variable": "항목"}
         )
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, use_container_width=True, key="ratios_profit_values_chart")
 
         # 1. 수익성 비율 (영업이익률, 순이익률)
         profit_ratios = pd.DataFrame({
@@ -408,7 +408,7 @@ class BridgeApp:
             labels={"value": "비율 (%)", "variable": "항목"},
             markers=True
         )
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, use_container_width=True, key="ratios_profit_ratios_chart")
         
         # 2. 성장성 비율 (매출 성장률)
         growth_ratios = pd.DataFrame({
@@ -425,7 +425,7 @@ class BridgeApp:
             color="매출 성장률",
             color_continuous_scale=["red", "yellow", "green"]
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True, key="ratios_growth_ratios_chart")
         
         # 3. 안정성 및 효율성 비율 (부채비율, ROE)
         stability_ratios = pd.DataFrame({
@@ -442,7 +442,7 @@ class BridgeApp:
             title="부채비율 및 ROE 추이",
             labels={"value": "비율 (%)", "variable": "항목"}
         )
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, use_container_width=True, key="ratios_stability_ratios_chart")
         
     def display_valuation(self, corp_code):
         """기업 가치 평가 정보 표시
@@ -691,7 +691,7 @@ class BridgeApp:
             # 탭 2: 재무
             with tabs[1]:
                 # 재무 내부 탭 생성
-                finance_tabs = st.tabs(["재무현황", "재무상태표", "손익계산서"])
+                finance_tabs = st.tabs(["재무현황", "재무상태표", "손익계산서", "종합"])
                 
                 # 재무현황 탭
                 with finance_tabs[0]:
@@ -704,6 +704,10 @@ class BridgeApp:
                 # 손익계산서 탭
                 with finance_tabs[2]:
                     self.display_income_statement(st.session_state.selected_company["corp_code"])
+                
+                # 종합 탭
+                with finance_tabs[3]:
+                    self.display_financial_overview(st.session_state.selected_company["corp_code"])
                 
             # 탭 3: 가치 평가
             with tabs[2]:
@@ -773,7 +777,8 @@ class BridgeApp:
         st.dataframe(
             df.style.apply(highlight_totals, axis=1),
             hide_index=True,
-            use_container_width=True
+            use_container_width=True,
+            key="balance_sheet_table"
         )
         
         # 주요 비율 계산 및 표시
@@ -794,7 +799,7 @@ class BridgeApp:
                 })
         
         ratios_df = pd.DataFrame(ratios_data)
-        st.dataframe(ratios_df, hide_index=True, use_container_width=True)
+        st.dataframe(ratios_df, hide_index=True, use_container_width=True, key="balance_sheet_ratios_table")
         
         # 시각화 섹션
         col1, col2 = st.columns(2)
@@ -817,7 +822,7 @@ class BridgeApp:
                 labels={"value": "금액 (백만원)", "variable": "항목"},
                 barmode="group"
             )
-            st.plotly_chart(fig1, use_container_width=True)
+            st.plotly_chart(fig1, use_container_width=True, key="balance_sheet_balance_chart")
         
         with col2:
             # 자산 구조 시각화
@@ -836,7 +841,7 @@ class BridgeApp:
                 labels={"value": "금액 (백만원)", "variable": "구분"},
                 barmode="stack"
             )
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, use_container_width=True, key="balance_sheet_asset_structure_chart")
 
     def display_income_statement(self, corp_code):
         """손익계산서 정보 표시
@@ -871,7 +876,7 @@ class BridgeApp:
         df = pd.DataFrame(income_data)
         
         # 표 형태로 데이터 표시
-        st.dataframe(df, hide_index=True, use_container_width=True)
+        st.dataframe(df, hide_index=True, use_container_width=True, key="income_statement_table")
         
         # 그래프 표시
         fig = px.line(
@@ -887,4 +892,156 @@ class BridgeApp:
             labels={"value": "금액 (백만원)", "variable": "항목"},
             markers=True
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="income_statement_chart")
+
+    def display_financial_overview(self, corp_code):
+        """모든 재무 관련 그래프를 한 화면에서 표시
+        
+        Args:
+            corp_code (str): 기업 고유 코드
+        """
+        st.subheader("재무 종합 분석")
+        
+        # 연도 선택기 표시
+        year_changed = self._year_selector("financial_overview")
+        
+        # 데이터 로드
+        financial_data, success = self._load_financial_data(corp_code)
+        if not success:
+            st.error("조회 가능한 재무 데이터가 없습니다.")
+            return
+        
+        # 재무 비율 계산
+        ratios = self.financial_analyzer.calculate_financial_ratios(financial_data)
+        
+        # 2열 레이아웃으로 그래프 배치
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 1. 자산/부채/자본 그래프
+            balance_df = pd.DataFrame({
+                "연도": [str(y) for y in financial_data["years"]],
+                "자산": financial_data["assets"],
+                "부채": financial_data["liabilities"],
+                "자본": financial_data["equity"]
+            })
+            
+            fig1 = px.bar(
+                balance_df, 
+                x="연도", 
+                y=["자산", "부채", "자본"],
+                barmode="group",
+                title="자산/부채/자본 추이",
+                labels={"value": "금액 (백만원)", "variable": "항목"}
+            )
+            st.plotly_chart(fig1, use_container_width=True, key="overview_balance_chart")
+            
+            # 3. 수익성 비율 (영업이익률, 순이익률)
+            profit_ratios = pd.DataFrame({
+                "연도": ratios["연도"],
+                "영업이익률": [float(r.strip('%')) if r != '-' else 0 for r in ratios["영업이익률"]],
+                "순이익률": [float(r.strip('%')) if r != '-' else 0 for r in ratios["순이익률"]]
+            })
+            
+            fig3 = px.line(
+                profit_ratios,
+                x="연도",
+                y=["영업이익률", "순이익률"],
+                title="수익성 비율 추이",
+                labels={"value": "비율 (%)", "variable": "항목"},
+                markers=True
+            )
+            st.plotly_chart(fig3, use_container_width=True, key="overview_profit_ratios_chart")
+            
+            # 5. 안정성 및 효율성 비율 (부채비율, ROE)
+            stability_ratios = pd.DataFrame({
+                "연도": ratios["연도"],
+                "부채비율": [float(r.strip('%')) if r != '-' else 0 for r in ratios["부채비율"]],
+                "ROE": [float(r.strip('%')) if r != '-' else 0 for r in ratios["ROE"]]
+            })
+            
+            fig5 = px.bar(
+                stability_ratios,
+                x="연도",
+                y=["부채비율", "ROE"],
+                barmode="group",
+                title="부채비율 및 ROE 추이",
+                labels={"value": "비율 (%)", "variable": "항목"}
+            )
+            st.plotly_chart(fig5, use_container_width=True, key="overview_stability_ratios_chart")
+        
+        with col2:
+            # 2. 매출/이익 그래프
+            income_df = pd.DataFrame({
+                "연도": [str(y) for y in financial_data["years"]],
+                "매출액": financial_data["revenue"],
+                "영업이익": financial_data["operating_profit"],
+                "당기순이익": financial_data["net_income"]
+            })
+            
+            fig2 = px.line(
+                income_df, 
+                x="연도", 
+                y=["매출액", "영업이익", "당기순이익"],
+                title="매출 및 이익 추이",
+                labels={"value": "금액 (백만원)", "variable": "항목"},
+                markers=True
+            )
+            st.plotly_chart(fig2, use_container_width=True, key="overview_income_chart")
+            
+            # 4. 성장성 비율 (매출 성장률)
+            growth_ratios = pd.DataFrame({
+                "연도": ratios["연도"],
+                "매출 성장률": [float(r.strip('%')) if r != '-' else 0 for r in ratios["매출 성장률"]]
+            })
+            
+            fig4 = px.bar(
+                growth_ratios,
+                x="연도",
+                y="매출 성장률",
+                title="매출 성장률 추이",
+                labels={"매출 성장률": "성장률 (%)"},
+                color="매출 성장률",
+                color_continuous_scale=["red", "yellow", "green"]
+            )
+            st.plotly_chart(fig4, use_container_width=True, key="overview_growth_ratios_chart")
+            
+            # 6. 자산 구조 시각화
+            asset_structure = pd.DataFrame({
+                "연도": [str(y) for y in financial_data["years"]],
+                "유동자산": financial_data["current_assets"],
+                "비유동자산": financial_data["non_current_assets"]
+            })
+            
+            fig6 = px.bar(
+                asset_structure,
+                x="연도",
+                y=["유동자산", "비유동자산"],
+                title="자산 구조 추이",
+                labels={"value": "금액 (백만원)", "variable": "구분"},
+                barmode="stack"
+            )
+            st.plotly_chart(fig6, use_container_width=True, key="overview_asset_structure_chart")
+        
+        # 7. 주요 재무비율 요약 테이블 (전체 너비 사용)
+        st.subheader("주요 재무비율 요약")
+        ratios_data = []
+        for i, year in enumerate(financial_data["years"]):
+            if financial_data["assets"][i] > 0:  # 0으로 나누기 방지
+                current_ratio = (financial_data["current_assets"][i] / financial_data["current_liabilities"][i] * 100) if financial_data["current_liabilities"][i] > 0 else 0
+                debt_ratio = (financial_data["liabilities"][i] / financial_data["assets"][i] * 100)
+                equity_ratio = (financial_data["equity"][i] / financial_data["assets"][i] * 100)
+                
+                ratios_data.append({
+                    "연도": str(year),
+                    "유동비율": f"{current_ratio:.1f}%",
+                    "부채비율": f"{debt_ratio:.1f}%",
+                    "자기자본비율": f"{equity_ratio:.1f}%",
+                    "영업이익률": ratios["영업이익률"][i],
+                    "순이익률": ratios["순이익률"][i],
+                    "ROE": ratios["ROE"][i],
+                    "매출 성장률": ratios["매출 성장률"][i]
+                })
+        
+        ratios_df = pd.DataFrame(ratios_data)
+        st.dataframe(ratios_df, hide_index=True, use_container_width=True, key="overview_ratios_table")
