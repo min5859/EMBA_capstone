@@ -48,7 +48,10 @@ class BridgeApp:
             st.session_state.selected_year = datetime.now().year - 1
         
         # 클래스 인스턴스 초기화
-        self.dart_api = None
+        if st.session_state.api_key:
+            self.dart_api = DartAPI(st.session_state.api_key)
+        else:
+            self.dart_api = None
         self.financial_analyzer = FinancialAnalyzer()
         self.llm_analyzer = LLMAnalyzer()
         self.gemma_analyzer = GemmaAnalyzer()
@@ -57,66 +60,32 @@ class BridgeApp:
 
     def setup_sidebar(self):
         """사이드바 설정"""
-        st.sidebar.title("Bridge POC")
-        st.sidebar.markdown("""
-        이 애플리케이션은 Open DART API를 활용하여 기업 정보를 조회하는 POC입니다.
-        """)
+        st.sidebar.title("🌉 Bridge POC")
         
-        # API 키 상태 체크 (DART API)
-        if not st.session_state.api_key:
-            # API 키가 없을 경우에만 입력 필드 표시
-            api_key = st.sidebar.text_input(
-                "OPEN DART API KEY를 입력하세요", 
-                type="password", 
-                key="dart_api_key",
-                help="API 키는 DART OpenAPI 사이트에서 발급받을 수 있습니다. .env 파일에 설정하면 자동으로 로드됩니다."
-            )
-            if api_key:
-                st.session_state.api_key = api_key
-                self.dart_api = DartAPI(api_key)
-                st.sidebar.success("DART API 키가 설정되었습니다.")
-                # 입력 필드 숨기기 위한 재실행
-                st.experimental_rerun()
-        else:
-            # API 키가 이미 있는 경우
-            st.sidebar.success("DART API 키가 설정되어 있습니다.")
-            # API 키 재설정 옵션
-            if st.sidebar.button("DART API 키 재설정", key="reset_dart_api"):
-                st.session_state.api_key = ""
-                st.experimental_rerun()
-            
-            # DartAPI 초기화
-            self.dart_api = DartAPI(st.session_state.api_key)
-        
-        # 구분선
-        st.sidebar.markdown("---")
-        
-        # OpenAI API 키 설정
-        if not st.session_state.openai_api_key:
-            # API 키가 없을 경우에만 입력 필드 표시
-            openai_api_key = st.sidebar.text_input(
-                "OpenAI API KEY를 입력하세요", 
-                type="password", 
-                key="openai_api_key_input",
-                help="LLM 분석을 위한 OpenAI API 키를 입력하세요. .env 파일에 설정하면 자동으로 로드됩니다."
-            )
-            if openai_api_key:
-                st.session_state.openai_api_key = openai_api_key
-                self.llm_analyzer.set_api_key(openai_api_key)
-                st.sidebar.success("OpenAI API 키가 설정되었습니다.")
-                # 입력 필드 숨기기 위한 재실행
-                st.experimental_rerun()
-        else:
-            # API 키가 이미 있는 경우
-            st.sidebar.success("OpenAI API 키가 설정되어 있습니다.")
-            # API 키 재설정 옵션
-            if st.sidebar.button("OpenAI API 키 재설정", key="reset_openai_api"):
-                st.session_state.openai_api_key = ""
-                st.experimental_rerun()
-            
-            # LLMAnalyzer 초기화
-            self.llm_analyzer.set_api_key(st.session_state.openai_api_key)
-    
+        # 기업 검색 섹션
+        with st.sidebar.expander("기업 검색", expanded=not st.session_state.selected_company):
+            search_keyword = st.text_input("기업명을 입력하세요:", value="삼성전자")
+            companies = self.search_companies(search_keyword)
+
+            if companies:
+                company_names = [f"{comp['corp_name']} ({comp['stock_code']})" for comp in companies]
+                selected_company_idx = st.selectbox("기업을 선택하세요:", range(len(company_names)), format_func=lambda x: company_names[x])
+
+                if st.button("기업 정보 조회"):
+                    selected_company = companies[selected_company_idx]
+                    self.on_company_select(selected_company)
+
+                    # 기업 정보 로딩
+                    with st.spinner("기업 정보를 조회 중입니다..."):
+                        company_info = self.dart_api.get_company_info(selected_company["corp_code"])
+                        if company_info:
+                            st.session_state.company_info = company_info
+            else:
+                if search_keyword:
+                    st.info("검색 결과가 없습니다. 다른 키워드로 검색해보세요.")
+                else:
+                    st.info("기업명을 입력하여 검색하세요.")
+
     def search_companies(self, keyword):
         """키워드로 기업 검색
         
@@ -641,45 +610,15 @@ class BridgeApp:
         # 사이드바 설정
         self.setup_sidebar()
 
-        # 메인 타이틀
-        st.title("Bridge - 기업 정보 조회 시스템 POC")
-
         # API 키 확인
         if not st.session_state.api_key:
             st.warning("사이드바에 Open DART API 키를 입력해주세요.")
             return
 
-        # API 연결
-        self.dart_api = DartAPI(st.session_state.api_key)
-        
-        # 기업 검색 섹션
-        with st.expander("기업 검색", expanded=not st.session_state.selected_company):
-            search_keyword = st.text_input("기업명을 입력하세요:", value="삼성전자")
-            companies = self.search_companies(search_keyword)
-
-            if companies:
-                company_names = [f"{comp['corp_name']} ({comp['stock_code']})" for comp in companies]
-                selected_company_idx = st.selectbox("기업을 선택하세요:", range(len(company_names)), format_func=lambda x: company_names[x])
-
-                if st.button("기업 정보 조회"):
-                    selected_company = companies[selected_company_idx]
-                    self.on_company_select(selected_company)
-
-                    # 기업 정보 로딩
-                    with st.spinner("기업 정보를 조회 중입니다..."):
-                        company_info = self.dart_api.get_company_info(selected_company["corp_code"])
-                        if company_info:
-                            st.session_state.company_info = company_info
-            else:
-                if search_keyword:
-                    st.info("검색 결과가 없습니다. 다른 키워드로 검색해보세요.")
-                else:
-                    st.info("기업명을 입력하여 검색하세요.")
-
         # 선택된 기업 정보 표시
         if st.session_state.selected_company and st.session_state.company_info:
             # 선택된 기업 정보 헤더 표시
-            st.markdown(f"## 선택된 기업: {st.session_state.company_info.get('corp_name', '알 수 없음')} ({st.session_state.selected_company.get('stock_code', '')})")
+            st.markdown(f"## {st.session_state.company_info.get('corp_name', '알 수 없음')} ({st.session_state.selected_company.get('stock_code', '')})")
 
             # 탭 생성
             tabs = st.tabs(["기업 개요", "재무", "가치 평가", "LLM 분석"])
@@ -716,6 +655,8 @@ class BridgeApp:
             # 탭 4: LLM 기업 분석
             with tabs[3]:
                 self.display_llm_analysis(st.session_state.company_info, st.session_state.selected_company["corp_code"])
+        else:
+            st.info("기업을 선택하세요.")
 
     def display_balance_sheet(self, corp_code):
         """재무상태표 정보 표시
