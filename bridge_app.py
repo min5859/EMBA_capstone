@@ -514,6 +514,10 @@ class BridgeApp:
                 key=analysis_mode_key
             )
 
+            # 분석 결과를 저장할 세션 상태 키 생성
+            result_key = f"{analyzer.__class__.__name__.lower()}_analysis_result"
+            valuation_data_key = f"{analyzer.__class__.__name__.lower()}_valuation_data"
+
             if analysis_mode == "기업 가치 종합 분석":
                 if st.button(f"{analyzer.__class__.__name__} 종합 분석 시작", key=run_analysis_key, type="primary", use_container_width=True):
                     with st.spinner(f"{analyzer.__class__.__name__}가 기업을 분석 중입니다..."):
@@ -530,13 +534,17 @@ class BridgeApp:
                             industry_info
                         )
 
+                        # 결과를 세션 상태에 저장
+                        st.session_state[result_key] = result
+
                         if result["status"] == "success":
                             st.success(f"{analyzer.__class__.__name__} 분석이 완료되었습니다!")
-                            st.markdown(f"## {analyzer.__class__.__name__} 기업 가치 평가 결과")
 
                             # 시각화 함수 호출
                             valuation_data = result.get("valuation_data")
                             if valuation_data:
+                                # 시각화 데이터를 세션 상태에 저장
+                                st.session_state[valuation_data_key] = valuation_data
                                 display_valuation_results(valuation_data)
 
                                 # 결과 다운로드 버튼 추가
@@ -550,6 +558,25 @@ class BridgeApp:
                                 st.error("기업 가치 평가 결과를 가져오지 못했습니다.")
                         else:
                             st.error(f"분석 중 오류가 발생했습니다: {result.get('message', '알 수 없는 오류')}")
+                        return  # 분석이 완료되면 함수 종료
+                else:
+                    # 이전 분석 결과가 있으면 표시
+                    if result_key in st.session_state and st.session_state[result_key]["status"] == "success":
+                        result = st.session_state[result_key]
+                        st.success(f"{analyzer.__class__.__name__} 분석이 완료되었습니다!")
+
+                        # 시각화 함수 호출
+                        valuation_data = st.session_state.get(valuation_data_key)
+                        if valuation_data:
+                            display_valuation_results(valuation_data)
+
+                            # 결과 다운로드 버튼 추가
+                            st.download_button(
+                                label="결과 JSON 다운로드",
+                                data=json.dumps(valuation_data, indent=2, ensure_ascii=False),
+                                file_name=f"{company_info['corp_name']}_{analyzer.__class__.__name__.lower()}_valuation.json",
+                                mime="application/json"
+                            )
 
             else:  # 맞춤형 질문 분석 모드
                 st.subheader(f"맞춤형 기업 분석 질문 ({analyzer.__class__.__name__})")
@@ -585,12 +612,23 @@ class BridgeApp:
                             user_question
                         )
 
+                        # 결과를 세션 상태에 저장
+                        st.session_state[question_result_key] = result
+
                         if result["status"] == "success":
                             st.success("질문 분석이 완료되었습니다!")
                             st.markdown("### 분석 결과")
                             st.markdown(result["analysis"])
                         else:
                             st.error(f"분석 중 오류가 발생했습니다: {result.get('message', '알 수 없는 오류')}")
+                    return  # 분석이 완료되면 함수 종료
+                else:
+                    # 이전 질문 분석 결과가 있으면 표시
+                    if question_result_key in st.session_state and st.session_state[question_result_key]["status"] == "success":
+                        result = st.session_state[question_result_key]
+                        st.success("질문 분석이 완료되었습니다!")
+                        st.markdown("### 분석 결과")
+                        st.markdown(result["analysis"])
 
         # 각 탭에 대해 분석 수행
         with analyzer_tabs[0]:
