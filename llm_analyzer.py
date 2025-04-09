@@ -118,14 +118,14 @@ class BaseAnalyzer:
         {{
           "company": "{company_name}",
           "ebitda_valuation": {{
-            "conservative": 숫자값,
-            "base": 숫자값,
-            "optimistic": 숫자값
+            "conservative": 숫자값, // 백만원 단위로 통일
+            "base": 숫자값, // 백만원 단위로 통일
+            "optimistic": 숫자값 // 백만원 단위로 통일
           }},
           "dcf_valuation": {{
-            "conservative": 숫자값,
-            "base": 숫자값,
-            "optimistic": 숫자값
+            "conservative": 숫자값, // 백만원 단위로 통일
+            "base": 숫자값, // 백만원 단위로 통일
+            "optimistic": 숫자값 // 백만원 단위로 통일
           }},
           "assumptions": {{
             "ebitda_multipliers": {{
@@ -133,24 +133,24 @@ class BaseAnalyzer:
               "base": 숫자값,
               "optimistic": 숫자값
             }},
-            "discount_rates": {{
+            "discount_rates": {{ // 백분율(%)로 표시
               "conservative": 숫자값,
               "base": 숫자값,
               "optimistic": 숫자값
             }},
-            "growth_rates": {{
+            "growth_rates": {{ // 백분율(%)로 표시
               "conservative": 숫자값,
               "base": 숫자값,
               "optimistic": 숫자값
             }},
-            "terminal_growth_rates": {{
+            "terminal_growth_rates": {{ // 백분율(%)로 표시
               "conservative": 숫자값,
               "base": 숫자값,
               "optimistic": 숫자값
             }}
           }},
           "calculations": {{
-            "average_ebitda": 숫자값,
+            "average_ebitda": 숫자값, // 백만원 단위로 통일
             "ebitda_description": "EBITDA 계산 방식에 대한 설명",
             "dcf_description": "DCF 계산 방식에 대한 간략한 설명"
           }},
@@ -158,10 +158,11 @@ class BaseAnalyzer:
         }}
         
         중요:
-        1. 각 시나리오별 계산에 사용된 가정(EBITDA 승수, 할인율, 성장률 등)을 명확히 포함할 것
-        2. EBITDA와 DCF 계산 방식에 대한 간략한 설명 포함
-        3. JSON 구조는 유지하되, 각 항목에 대한 설명을 포함하여 결과의 신뢰성 제공
-        4. 값은 단위 없이 숫자만 출력(예: 1000000, 275000000)
+        1. 모든 금액은 백만원 단위로 통일하여 표시할 것(ex: 1조원 = 1,000,000백만원)
+        2. 각 시나리오별 계산에 사용된 가정(EBITDA 승수, 할인율, 성장률 등)을 명확히 포함할 것
+        3. EBITDA와 DCF 계산 방식에 대한 간략한 설명 포함
+        4. JSON 구조는 유지하되, 각 항목에 대한 설명을 포함하여 결과의 신뢰성 제공
+        5. 모든 숫자값은 단위를 제외한 숫자만 출력하고, 콤마(,)나 소수점 외 다른 기호 사용 금지
         """
         return prompt
 

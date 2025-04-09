@@ -204,9 +204,9 @@ def display_valuation_results(valuation_data: Dict[str, Any]):
                     st.dataframe({
                         "시나리오": scenarios,
                         "할인율(%)": [
-                            f"{discount_rates.get('conservative', 0) * 100:.1f}",
-                            f"{discount_rates.get('base', 0) * 100:.1f}",
-                            f"{discount_rates.get('optimistic', 0) * 100:.1f}"
+                            f"{discount_rates.get('conservative', 0):.1f}",
+                            f"{discount_rates.get('base', 0):.1f}",
+                            f"{discount_rates.get('optimistic', 0):.1f}"
                         ]
                     })
                 else:
@@ -223,9 +223,9 @@ def display_valuation_results(valuation_data: Dict[str, Any]):
                     st.dataframe({
                         "시나리오": scenarios,
                         "성장률(%)": [
-                            f"{growth_rates.get('conservative', 0) * 100:.1f}",
-                            f"{growth_rates.get('base', 0) * 100:.1f}",
-                            f"{growth_rates.get('optimistic', 0) * 100:.1f}"
+                            f"{growth_rates.get('conservative', 0):.1f}",
+                            f"{growth_rates.get('base', 0):.1f}",
+                            f"{growth_rates.get('optimistic', 0):.1f}"
                         ]
                     })
                 else:
@@ -239,9 +239,9 @@ def display_valuation_results(valuation_data: Dict[str, Any]):
                     st.dataframe({
                         "시나리오": scenarios,
                         "영구성장률(%)": [
-                            f"{terminal_growth_rates.get('conservative', 0) * 100:.1f}",
-                            f"{terminal_growth_rates.get('base', 0) * 100:.1f}",
-                            f"{terminal_growth_rates.get('optimistic', 0) * 100:.1f}"
+                            f"{terminal_growth_rates.get('conservative', 0):.1f}",
+                            f"{terminal_growth_rates.get('base', 0):.1f}",
+                            f"{terminal_growth_rates.get('optimistic', 0):.1f}"
                         ]
                     })
                 else:
